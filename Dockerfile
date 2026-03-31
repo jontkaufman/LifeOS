@@ -24,6 +24,6 @@ COPY backend/ backend/
 # Create data directory
 RUN mkdir -p data
 
-EXPOSE 8080
+EXPOSE 8081
 
 CMD ["python", "backend/main.py"]
