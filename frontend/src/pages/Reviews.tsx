@@ -95,19 +95,15 @@ export default function Reviews() {
 function ReviewEditor({ review, areas, onUpdate, onComplete }: {
   review: Review;
   areas: Array<{ id: number; name: string; icon: string; color: string }>;
-  onUpdate: (id: number, data: Record<string, unknown>) => Promise<void>;
+  onUpdate: (id: number, data: Record<string, unknown>) => void;
   onComplete: (id: number) => Promise<void>;
 }) {
-  const [saving, setSaving] = useState(false);
-
-  const save = async (field: string, value: unknown) => {
-    setSaving(true);
-    await onUpdate(review.id, { [field]: value });
-    setSaving(false);
+  const save = (field: string, value: unknown) => {
+    onUpdate(review.id, { [field]: value });
   };
 
-  const saveAreaScore = async (lifeAreaId: number, score: number) => {
-    await onUpdate(review.id, {
+  const saveAreaScore = (lifeAreaId: number, score: number) => {
+    onUpdate(review.id, {
       area_scores: [{ life_area_id: lifeAreaId, score }],
     });
   };
