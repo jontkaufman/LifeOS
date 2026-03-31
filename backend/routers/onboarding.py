@@ -10,12 +10,25 @@ router = APIRouter()
 @router.get("/status")
 async def get_status(db: AsyncSession = Depends(get_db)):
     settings = await get_or_create_settings(db)
-    from config import get_configured_providers
-    providers = get_configured_providers()
-    # If an API key is already stored, auto-complete onboarding
-    if providers and not settings.onboarding_completed:
-        settings.onboarding_completed = True
-        await db.commit()
+    if not settings.onboarding_completed:
+        # Auto-complete if API keys exist or user data already present
+        from config import get_configured_providers
+        providers = get_configured_providers()
+        if providers:
+            settings.onboarding_completed = True
+            await db.commit()
+        else:
+            # Check if profile or goals exist as a fallback signal
+            from models.profile import UserProfile
+            from models.goals import Goal
+            profile = (await db.execute(select(UserProfile).limit(1))).scalar_one_or_none()
+            has_data = profile and profile.full_name
+            if not has_data:
+                goal_count = (await db.execute(select(Goal).limit(1))).scalar_one_or_none()
+                has_data = goal_count is not None
+            if has_data:
+                settings.onboarding_completed = True
+                await db.commit()
     return {"completed": settings.onboarding_completed}
 
 

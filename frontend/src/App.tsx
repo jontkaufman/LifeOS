@@ -12,12 +12,25 @@ import Settings from '@/pages/Settings';
 import Onboarding from '@/pages/Onboarding';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
+const ONBOARDING_KEY = 'lifeos_onboarding_done';
+
 export default function App() {
-  const [onboardingCompleted, setOnboardingCompleted] = useState<boolean | null>(null);
+  const [onboardingCompleted, setOnboardingCompleted] = useState<boolean | null>(() => {
+    return localStorage.getItem(ONBOARDING_KEY) === '1' ? true : null;
+  });
+
+  const markComplete = () => {
+    localStorage.setItem(ONBOARDING_KEY, '1');
+    setOnboardingCompleted(true);
+  };
 
   useEffect(() => {
+    if (onboardingCompleted) return;
     api.get<{ completed: boolean }>('/onboarding/status')
-      .then(res => setOnboardingCompleted(res.completed))
+      .then(res => {
+        if (res.completed) markComplete();
+        else setOnboardingCompleted(false);
+      })
       .catch(() => setOnboardingCompleted(false));
   }, []);
 
@@ -34,7 +47,7 @@ export default function App() {
       <TooltipProvider>
         <Routes>
           <Route path="/onboarding" element={
-            <Onboarding onComplete={() => setOnboardingCompleted(true)} />
+            <Onboarding onComplete={markComplete} />
           } />
           {!onboardingCompleted ? (
             <Route path="*" element={<Navigate to="/onboarding" replace />} />

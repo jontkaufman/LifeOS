@@ -199,10 +199,10 @@ function DashboardChat({ coachingMessage }: { coachingMessage: string | null }) 
     if (convo) localStorage.setItem(DASHBOARD_CONVO_KEY, String(convo.id));
   };
 
-  // Scroll to bottom on new messages
+  // Scroll to bottom on new messages or tool activity
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [activeConvo?.messages, streamContent]);
+  }, [activeConvo?.messages, streamContent, toolActivity]);
 
   const handleSend = () => {
     if (!input.trim() || streaming) return;

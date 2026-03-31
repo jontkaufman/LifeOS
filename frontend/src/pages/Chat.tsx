@@ -39,7 +39,7 @@ export default function Chat() {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [activeConvo?.messages, streamContent]);
+  }, [activeConvo?.messages, streamContent, toolActivity]);
 
   const handleSend = () => {
     if (!input.trim() || streaming) return;
