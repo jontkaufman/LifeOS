@@ -1,10 +1,29 @@
-from datetime import datetime
+from datetime import datetime, date
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from database import get_db
 from models.goals import Goal, Milestone
+
+
+def _clean_goal_data(data: dict) -> dict:
+    """Sanitize incoming goal data — convert date strings, strip nullish values."""
+    cleaned = {}
+    for k, v in data.items():
+        if k == "target_date":
+            if v:
+                try:
+                    cleaned[k] = date.fromisoformat(v) if isinstance(v, str) else v
+                except (ValueError, TypeError):
+                    pass
+            else:
+                cleaned[k] = None
+        elif v is None:
+            cleaned[k] = v
+        else:
+            cleaned[k] = v
+    return cleaned
 
 router = APIRouter()
 
@@ -50,7 +69,12 @@ async def create_goal(data: dict, db: AsyncSession = Depends(get_db)):
     allowed = ["title", "description", "life_area_id", "goal_type", "purpose_why",
                "identity_statement", "commitment_level", "estimated_weekly_hours",
                "priority", "status", "target_date", "review_cadence"]
-    goal = Goal(**{k: v for k, v in data.items() if k in allowed})
+    cleaned = _clean_goal_data(data)
+    goal = Goal(**{k: v for k, v in cleaned.items() if k in allowed and v is not None})
+    # Set nullable fields explicitly
+    for k in ["identity_statement", "estimated_weekly_hours", "target_date"]:
+        if k in cleaned and cleaned[k] is None:
+            setattr(goal, k, None)
     db.add(goal)
     await db.commit()
     await db.refresh(goal)
@@ -66,9 +90,10 @@ async def update_goal(goal_id: int, data: dict, db: AsyncSession = Depends(get_d
     allowed = ["title", "description", "life_area_id", "goal_type", "purpose_why",
                "identity_statement", "commitment_level", "estimated_weekly_hours",
                "priority", "status", "progress", "target_date", "review_cadence", "abandon_reason"]
+    cleaned = _clean_goal_data(data)
     for key in allowed:
-        if key in data:
-            setattr(goal, key, data[key])
+        if key in cleaned:
+            setattr(goal, key, cleaned[key])
     if data.get("status") == "completed" and not goal.completed_at:
         goal.completed_at = datetime.utcnow()
     await db.commit()

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useGoals, type Goal } from '@/hooks/useGoals';
 import { useProfile, type LifeArea } from '@/hooks/useProfile';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,17 +13,16 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Plus, Target, CheckCircle2, Circle, Clock, Pause,
-  ChevronDown, ChevronUp, Trash2, Edit2,
+  Trash2, Edit2, GripVertical, ArrowRight,
 } from 'lucide-react';
 import { selectHandler, sliderHandler } from '@/lib/ui-helpers';
 
-const STATUS_CONFIG: Record<string, { label: string; color: string; icon: typeof Target }> = {
-  not_started: { label: 'Not Started', color: 'text-muted-foreground', icon: Circle },
-  in_progress: { label: 'In Progress', color: 'text-blue-400', icon: Clock },
-  completed: { label: 'Completed', color: 'text-green-400', icon: CheckCircle2 },
-  paused: { label: 'Paused', color: 'text-yellow-400', icon: Pause },
-  abandoned: { label: 'Abandoned', color: 'text-red-400', icon: Trash2 },
-};
+const COLUMNS = [
+  { key: 'not_started', label: 'Not Started', icon: Circle, color: 'text-muted-foreground', border: 'border-border' },
+  { key: 'in_progress', label: 'In Progress', icon: Clock, color: 'text-blue-400', border: 'border-blue-500/30' },
+  { key: 'completed', label: 'Completed', icon: CheckCircle2, color: 'text-green-400', border: 'border-green-500/30' },
+  { key: 'paused', label: 'Paused', icon: Pause, color: 'text-yellow-400', border: 'border-yellow-500/30' },
+] as const;
 
 export default function Goals() {
   const { goals, loading, createGoal, updateGoal, deleteGoal, addMilestone, updateMilestone, deleteMilestone } = useGoals();
@@ -31,51 +30,31 @@ export default function Goals() {
   const [showForm, setShowForm] = useState(false);
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
   const [expandedGoal, setExpandedGoal] = useState<number | null>(null);
-  const [filterArea, setFilterArea] = useState<string>('all');
-  const [filterStatus, setFilterStatus] = useState<string>('active');
 
   const areas = profileData?.life_areas || [];
 
-  const filteredGoals = goals.filter(g => {
-    if (filterArea !== 'all' && g.life_area_id !== Number(filterArea)) return false;
-    if (filterStatus === 'active' && ['completed', 'abandoned'].includes(g.status)) return false;
-    if (filterStatus !== 'all' && filterStatus !== 'active' && g.status !== filterStatus) return false;
-    return true;
-  });
+  const handleEdit = (goal: Goal) => {
+    setEditingGoal(goal);
+    setShowForm(true);
+  };
 
-  // Group by life area
-  const grouped = new Map<number, Goal[]>();
-  filteredGoals.forEach(g => {
-    const list = grouped.get(g.life_area_id) || [];
-    list.push(g);
-    grouped.set(g.life_area_id, list);
-  });
+  const handleCloseForm = () => {
+    setShowForm(false);
+    setEditingGoal(null);
+  };
+
+  const moveGoal = (goalId: number, newStatus: string) => {
+    const updates: Partial<Goal> & { progress?: number } = { status: newStatus };
+    if (newStatus === 'completed') updates.progress = 100;
+    updateGoal(goalId, updates);
+  };
 
   return (
-    <div className="space-y-6">
-      {/* Filters & Actions */}
-      <div className="flex items-center gap-3">
-        <Select value={filterStatus} onValueChange={selectHandler(setFilterStatus)}>
-          <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="active">Active</SelectItem>
-            <SelectItem value="all">All</SelectItem>
-            <SelectItem value="not_started">Not Started</SelectItem>
-            <SelectItem value="in_progress">In Progress</SelectItem>
-            <SelectItem value="completed">Completed</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={filterArea} onValueChange={selectHandler(setFilterArea)}>
-          <SelectTrigger className="w-48"><SelectValue placeholder="All Areas" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Areas</SelectItem>
-            {areas.map(a => (
-              <SelectItem key={a.id} value={String(a.id)}>{a.icon} {a.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+    <div className="h-full flex flex-col">
+      {/* Header */}
+      <div className="flex items-center gap-3 mb-4 shrink-0">
         <div className="flex-1" />
-        <Dialog open={showForm} onOpenChange={setShowForm}>
+        <Dialog open={showForm} onOpenChange={(open) => { if (!open) handleCloseForm(); else setShowForm(true); }}>
           <DialogTrigger render={<Button><Plus className="h-4 w-4 mr-2" /> New Goal</Button>} />
           <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
             <DialogHeader>
@@ -90,8 +69,7 @@ export default function Goals() {
                 } else {
                   await createGoal(data);
                 }
-                setShowForm(false);
-                setEditingGoal(null);
+                handleCloseForm();
               }}
             />
           </DialogContent>
@@ -100,135 +78,137 @@ export default function Goals() {
 
       {loading ? (
         <div className="text-muted-foreground">Loading goals...</div>
-      ) : filteredGoals.length === 0 ? (
-        <Card>
-          <CardContent className="p-12 text-center">
-            <Target className="h-12 w-12 mx-auto mb-4 text-muted-foreground/30" />
-            <p className="text-muted-foreground">No goals yet. Create your first goal to get started!</p>
-          </CardContent>
-        </Card>
       ) : (
-        Array.from(grouped.entries()).map(([areaId, areaGoals]) => {
-          const area = areas.find(a => a.id === areaId);
-          return (
-            <div key={areaId}>
-              <h3 className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
-                <span>{area?.icon || '📌'}</span>
-                <span>{area?.name || 'Uncategorized'}</span>
-                <Badge variant="outline" className="text-xs">{areaGoals.length}</Badge>
-              </h3>
-              <div className="space-y-3">
-                {areaGoals.map(goal => {
-                  const expanded = expandedGoal === goal.id;
-                  const statusConfig = STATUS_CONFIG[goal.status] || STATUS_CONFIG.not_started;
-                  const StatusIcon = statusConfig.icon;
-                  return (
-                    <Card key={goal.id}>
-                      <CardContent className="p-4">
-                        <div className="flex items-start gap-3">
-                          <StatusIcon className={`h-5 w-5 mt-0.5 shrink-0 ${statusConfig.color}`} />
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <h4 className="font-medium text-sm">{goal.title}</h4>
-                              <Badge variant="outline" className="text-[10px]">{goal.priority}</Badge>
-                              <Badge variant="outline" className="text-[10px]">{goal.goal_type}</Badge>
-                            </div>
-                            <div className="flex items-center gap-2 mt-2">
-                              <Progress value={goal.progress} className="h-1.5 flex-1" />
-                              <span className="text-xs text-muted-foreground font-mono">{goal.progress}%</span>
-                            </div>
-                            {goal.purpose_why && (
-                              <p className="text-xs text-muted-foreground mt-1 italic">Why: {goal.purpose_why}</p>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditingGoal(goal); setShowForm(true); }}>
-                              <Edit2 className="h-3 w-3" />
-                            </Button>
-                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setExpandedGoal(expanded ? null : goal.id)}>
-                              {expanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                            </Button>
-                          </div>
-                        </div>
+        <div className="flex-1 flex gap-4 overflow-x-auto pb-2">
+          {COLUMNS.map(col => {
+            const ColIcon = col.icon;
+            const columnGoals = goals.filter(g => g.status === col.key);
+            return (
+              <div key={col.key} className={`w-72 shrink-0 flex flex-col rounded-lg border ${col.border} bg-card/30`}>
+                {/* Column header */}
+                <div className="px-3 py-2.5 border-b border-border/50 flex items-center gap-2">
+                  <ColIcon className={`h-4 w-4 ${col.color}`} />
+                  <span className="text-sm font-medium">{col.label}</span>
+                  <Badge variant="outline" className="text-[10px] ml-auto">{columnGoals.length}</Badge>
+                </div>
 
-                        {expanded && (
-                          <div className="mt-4 pt-4 border-t border-border space-y-3">
-                            {goal.description && <p className="text-sm">{goal.description}</p>}
-                            {goal.identity_statement && (
-                              <p className="text-sm text-primary italic">"{goal.identity_statement}"</p>
-                            )}
-                            <div className="grid grid-cols-3 gap-4 text-sm">
-                              <div>
-                                <span className="text-muted-foreground">Commitment:</span>
-                                <span className="ml-1 font-mono">{goal.commitment_level}/10</span>
+                {/* Cards */}
+                <div className="flex-1 overflow-y-auto p-2 space-y-2">
+                  {columnGoals.map(goal => {
+                    const area = areas.find(a => a.id === goal.life_area_id);
+                    const expanded = expandedGoal === goal.id;
+                    return (
+                      <Card key={goal.id} className="border-border/50 bg-card">
+                        <CardContent className="p-3">
+                          <div className="flex items-start gap-2">
+                            <GripVertical className="h-4 w-4 mt-0.5 text-muted-foreground/30 shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <button
+                                className="text-sm font-medium text-left w-full truncate hover:text-primary transition-colors"
+                                onClick={() => setExpandedGoal(expanded ? null : goal.id)}
+                              >
+                                {goal.title}
+                              </button>
+                              <div className="flex items-center gap-1.5 mt-1.5">
+                                {area && (
+                                  <Badge variant="outline" className="text-[10px] px-1 py-0">
+                                    {area.icon} {area.name.split(' ')[0]}
+                                  </Badge>
+                                )}
+                                <Badge variant="outline" className="text-[10px] px-1 py-0">
+                                  {goal.priority}
+                                </Badge>
                               </div>
-                              {goal.estimated_weekly_hours && (
-                                <div>
-                                  <span className="text-muted-foreground">Weekly hours:</span>
-                                  <span className="ml-1 font-mono">{goal.estimated_weekly_hours}h</span>
-                                </div>
+                              <div className="flex items-center gap-2 mt-2">
+                                <Progress value={goal.progress} className="h-1 flex-1" />
+                                <span className="text-[10px] text-muted-foreground font-mono">{goal.progress}%</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {expanded && (
+                            <div className="mt-3 pt-3 border-t border-border/50 space-y-2.5">
+                              {goal.description && (
+                                <p className="text-xs text-muted-foreground">{goal.description}</p>
+                              )}
+                              {goal.purpose_why && (
+                                <p className="text-xs italic text-muted-foreground">Why: {goal.purpose_why}</p>
                               )}
                               {goal.target_date && (
-                                <div>
-                                  <span className="text-muted-foreground">Target:</span>
-                                  <span className="ml-1">{goal.target_date}</span>
+                                <p className="text-xs text-muted-foreground">Target: {goal.target_date}</p>
+                              )}
+
+                              {/* Milestones */}
+                              {goal.milestones.length > 0 && (
+                                <div className="space-y-1">
+                                  <p className="text-xs font-medium">Milestones</p>
+                                  {goal.milestones.map(m => (
+                                    <div key={m.id} className="flex items-center gap-1.5 text-xs">
+                                      <button onClick={() => updateMilestone(goal.id, m.id, { is_completed: !m.is_completed })}>
+                                        {m.is_completed
+                                          ? <CheckCircle2 className="h-3 w-3 text-primary" />
+                                          : <Circle className="h-3 w-3 text-muted-foreground" />
+                                        }
+                                      </button>
+                                      <span className={m.is_completed ? 'line-through text-muted-foreground' : ''}>{m.title}</span>
+                                      <button onClick={() => deleteMilestone(goal.id, m.id)} className="ml-auto text-muted-foreground hover:text-destructive">
+                                        <Trash2 className="h-2.5 w-2.5" />
+                                      </button>
+                                    </div>
+                                  ))}
                                 </div>
                               )}
-                            </div>
 
-                            {/* Milestones */}
-                            <div>
-                              <h5 className="text-sm font-medium mb-2">Milestones</h5>
-                              <div className="space-y-1">
-                                {goal.milestones.map(m => (
-                                  <div key={m.id} className="flex items-center gap-2 text-sm">
-                                    <button onClick={() => updateMilestone(goal.id, m.id, { is_completed: !m.is_completed })}>
-                                      {m.is_completed
-                                        ? <CheckCircle2 className="h-4 w-4 text-primary" />
-                                        : <Circle className="h-4 w-4 text-muted-foreground" />
-                                      }
-                                    </button>
-                                    <span className={m.is_completed ? 'line-through text-muted-foreground' : ''}>{m.title}</span>
-                                    <button onClick={() => deleteMilestone(goal.id, m.id)} className="ml-auto text-muted-foreground hover:text-destructive">
-                                      <Trash2 className="h-3 w-3" />
-                                    </button>
-                                  </div>
-                                ))}
-                              </div>
                               <MilestoneAdder goalId={goal.id} onAdd={addMilestone} />
-                            </div>
 
-                            {/* Status actions */}
-                            <div className="flex gap-2">
-                              {goal.status !== 'completed' && (
-                                <Button size="sm" variant="outline" onClick={() => updateGoal(goal.id, { status: 'completed', progress: 100 })}>
-                                  Mark Complete
+                              {/* Move actions */}
+                              <div className="flex flex-wrap gap-1 pt-1">
+                                {col.key !== 'in_progress' && (
+                                  <Button size="sm" variant="outline" className="h-6 text-[10px] px-2" onClick={() => moveGoal(goal.id, 'in_progress')}>
+                                    <ArrowRight className="h-2.5 w-2.5 mr-1" /> Start
+                                  </Button>
+                                )}
+                                {col.key !== 'completed' && (
+                                  <Button size="sm" variant="outline" className="h-6 text-[10px] px-2" onClick={() => moveGoal(goal.id, 'completed')}>
+                                    <CheckCircle2 className="h-2.5 w-2.5 mr-1" /> Complete
+                                  </Button>
+                                )}
+                                {col.key === 'in_progress' && (
+                                  <Button size="sm" variant="outline" className="h-6 text-[10px] px-2" onClick={() => moveGoal(goal.id, 'paused')}>
+                                    <Pause className="h-2.5 w-2.5 mr-1" /> Pause
+                                  </Button>
+                                )}
+                                {col.key === 'paused' && (
+                                  <Button size="sm" variant="outline" className="h-6 text-[10px] px-2" onClick={() => moveGoal(goal.id, 'in_progress')}>
+                                    <ArrowRight className="h-2.5 w-2.5 mr-1" /> Resume
+                                  </Button>
+                                )}
+                                <div className="flex-1" />
+                                <Button size="sm" variant="ghost" className="h-6 text-[10px] px-1.5" onClick={() => handleEdit(goal)}>
+                                  <Edit2 className="h-2.5 w-2.5" />
                                 </Button>
-                              )}
-                              {goal.status === 'in_progress' && (
-                                <Button size="sm" variant="outline" onClick={() => updateGoal(goal.id, { status: 'paused' })}>
-                                  Pause
+                                <Button size="sm" variant="ghost" className="h-6 text-[10px] px-1.5 text-destructive" onClick={() => deleteGoal(goal.id)}>
+                                  <Trash2 className="h-2.5 w-2.5" />
                                 </Button>
-                              )}
-                              {['not_started', 'paused'].includes(goal.status) && (
-                                <Button size="sm" variant="outline" onClick={() => updateGoal(goal.id, { status: 'in_progress' })}>
-                                  Start / Resume
-                                </Button>
-                              )}
-                              <Button size="sm" variant="ghost" className="text-destructive ml-auto" onClick={() => deleteGoal(goal.id)}>
-                                <Trash2 className="h-3 w-3 mr-1" /> Delete
-                              </Button>
+                              </div>
                             </div>
-                          </div>
-                        )}
-                      </CardContent>
-                    </Card>
-                  );
-                })}
+                          )}
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+
+                  {columnGoals.length === 0 && (
+                    <div className="text-center py-8 text-muted-foreground/40">
+                      <Target className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                      <p className="text-xs">No goals</p>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          );
-        })
+            );
+          })}
+        </div>
       )}
     </div>
   );
@@ -245,6 +225,21 @@ function GoalForm({ goal, areas, onSave }: { goal: Goal | null; areas: LifeArea[
   const [weeklyHours, setWeeklyHours] = useState(String(goal?.estimated_weekly_hours || ''));
   const [priority, setPriority] = useState(goal?.priority || 'medium');
   const [targetDate, setTargetDate] = useState(goal?.target_date || '');
+  const [progress, setProgress] = useState(goal?.progress || 0);
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    await onSave({
+      title, description, life_area_id: Number(lifeAreaId), goal_type: goalType,
+      purpose_why: purposeWhy, identity_statement: identityStatement || null,
+      commitment_level: commitmentLevel,
+      estimated_weekly_hours: weeklyHours ? Number(weeklyHours) : null,
+      priority, target_date: targetDate || null,
+      ...(goal ? { progress } : {}),
+    });
+    setSaving(false);
+  };
 
   return (
     <div className="space-y-4">
@@ -290,12 +285,19 @@ function GoalForm({ goal, areas, onSave }: { goal: Goal | null; areas: LifeArea[
         <Label>Commitment Level: {commitmentLevel}/10</Label>
         <Slider value={[commitmentLevel]} onValueChange={sliderHandler(setCommitmentLevel)} min={1} max={10} step={1} className="mt-2" />
       </div>
+      {goal && (
+        <div>
+          <Label>Progress: {progress}%</Label>
+          <Slider value={[progress]} onValueChange={sliderHandler(setProgress)} min={0} max={100} step={5} className="mt-2" />
+        </div>
+      )}
       <div className="grid grid-cols-3 gap-4">
         <div>
           <Label>Priority</Label>
           <Select value={priority} onValueChange={selectHandler(setPriority)}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
+              <SelectItem value="critical">Critical</SelectItem>
               <SelectItem value="high">High</SelectItem>
               <SelectItem value="medium">Medium</SelectItem>
               <SelectItem value="low">Low</SelectItem>
@@ -311,13 +313,7 @@ function GoalForm({ goal, areas, onSave }: { goal: Goal | null; areas: LifeArea[
           <Input type="date" value={targetDate} onChange={e => setTargetDate(e.target.value)} />
         </div>
       </div>
-      <Button onClick={() => onSave({
-        title, description, life_area_id: Number(lifeAreaId), goal_type: goalType,
-        purpose_why: purposeWhy, identity_statement: identityStatement || null,
-        commitment_level: commitmentLevel,
-        estimated_weekly_hours: weeklyHours ? Number(weeklyHours) : null,
-        priority, target_date: targetDate || null,
-      })} className="w-full" disabled={!title.trim()}>
+      <Button onClick={handleSave} className="w-full" disabled={!title.trim() || saving}>
         {goal ? 'Update Goal' : 'Create Goal'}
       </Button>
     </div>
@@ -330,19 +326,19 @@ function MilestoneAdder({ goalId, onAdd }: { goalId: number; onAdd: (goalId: num
 
   if (!show) {
     return (
-      <Button variant="ghost" size="sm" className="text-xs text-muted-foreground mt-1" onClick={() => setShow(true)}>
-        <Plus className="h-3 w-3 mr-1" /> Add milestone
+      <Button variant="ghost" size="sm" className="text-[10px] text-muted-foreground h-6" onClick={() => setShow(true)}>
+        <Plus className="h-2.5 w-2.5 mr-1" /> Add milestone
       </Button>
     );
   }
 
   return (
-    <div className="flex gap-2 mt-2">
+    <div className="flex gap-1.5">
       <Input
         value={title}
         onChange={e => setTitle(e.target.value)}
-        placeholder="Milestone title..."
-        className="h-8 text-sm"
+        placeholder="Milestone..."
+        className="h-6 text-xs"
         onKeyDown={e => {
           if (e.key === 'Enter' && title.trim()) {
             onAdd(goalId, { title: title.trim() });
@@ -350,7 +346,7 @@ function MilestoneAdder({ goalId, onAdd }: { goalId: number; onAdd: (goalId: num
           }
         }}
       />
-      <Button size="sm" className="h-8" onClick={() => { if (title.trim()) { onAdd(goalId, { title: title.trim() }); setTitle(''); } }}>
+      <Button size="sm" className="h-6 text-[10px] px-2" onClick={() => { if (title.trim()) { onAdd(goalId, { title: title.trim() }); setTitle(''); } }}>
         Add
       </Button>
     </div>
