@@ -8,7 +8,7 @@ export function Layout() {
       <Sidebar />
       <div className="ml-64">
         <Header />
-        <main className="p-6 h-[calc(100vh-4rem)] overflow-hidden">
+        <main className="p-6 h-[calc(100vh-4rem)] overflow-y-auto">
           <Outlet />
         </main>
       </div>
