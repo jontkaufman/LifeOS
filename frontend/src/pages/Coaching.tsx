@@ -36,6 +36,7 @@ export default function Coaching() {
   const [showCustom, setShowCustom] = useState(false);
   const [personaName, setPersonaName] = useState('');
   const [generating, setGenerating] = useState(false);
+  const [generateError, setGenerateError] = useState('');
   const [customStyle, setCustomStyle] = useState<Partial<CoachingStyle>>({
     name: '', description: '',
     challenge_vs_support: 5, tactical_specificity: 5, emotional_depth: 5,
@@ -51,9 +52,12 @@ export default function Coaching() {
   const handleGenerate = async () => {
     if (!personaName.trim()) return;
     setGenerating(true);
+    setGenerateError('');
     try {
       const params = await generatePersona(personaName.trim());
-      if (!('error' in params)) {
+      if ('error' in params) {
+        setGenerateError(params.error as string);
+      } else {
         setCustomStyle(prev => ({
           ...prev,
           name: `${personaName}-Inspired`,
@@ -66,7 +70,9 @@ export default function Coaching() {
           time_orientation: (params.time_orientation as string) || 'balanced',
         }));
       }
-    } catch { /* ignore */ }
+    } catch {
+      setGenerateError('Failed to generate persona. Check your AI provider settings.');
+    }
     setGenerating(false);
   };
 
@@ -130,12 +136,16 @@ export default function Coaching() {
                   value={personaName}
                   onChange={e => setPersonaName(e.target.value)}
                   placeholder="e.g., Mel Robbins, Simon Sinek, Oprah..."
+                  onKeyDown={e => e.key === 'Enter' && handleGenerate()}
                 />
                 <Button onClick={handleGenerate} disabled={generating || !personaName.trim()}>
                   {generating ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Sparkles className="h-4 w-4 mr-2" />}
                   Generate
                 </Button>
               </div>
+              {generateError && (
+                <p className="text-sm text-destructive mt-2">{generateError}</p>
+              )}
             </CardContent>
           </Card>
 

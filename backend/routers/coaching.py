@@ -115,8 +115,12 @@ Return ONLY valid JSON, no other text."""
         system="You are a helpful assistant that returns only valid JSON."
     )
     import json
+    import re
     try:
-        params = json.loads(response)
+        # Strip markdown code fences if present
+        cleaned = re.sub(r'^```(?:json)?\s*', '', response.strip())
+        cleaned = re.sub(r'\s*```$', '', cleaned.strip())
+        params = json.loads(cleaned)
         return params
     except json.JSONDecodeError:
         return {"error": "Failed to parse AI response"}

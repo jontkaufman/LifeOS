@@ -9,9 +9,21 @@ import { Slider } from '@/components/ui/slider';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Plus, Save, Trash2 } from 'lucide-react';
+import { Plus, Save, Trash2, HelpCircle } from 'lucide-react';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { selectHandler, sliderHandler } from '@/lib/ui-helpers';
 import { RadarChart, PolarGrid, PolarAngleAxis, Radar, ResponsiveContainer } from 'recharts';
+
+const AREA_HINTS: Record<string, string> = {
+  career: "Your professional life — job satisfaction, career growth, work-life balance, sense of purpose at work, professional relationships.",
+  finances: "Money & financial health — income, savings, debt, investments, financial security, spending habits, progress toward financial goals.",
+  health: "Physical wellbeing — exercise, nutrition, sleep quality, energy levels, medical checkups, chronic conditions, body image.",
+  relationships: "Friendships & romantic connections — depth of friendships, social life, dating/partnership, trust, communication, feeling supported.",
+  family: "Family bonds — closeness with parents/siblings/children, quality time, family dynamics, boundaries, caregiving responsibilities.",
+  personal_growth: "Learning & self-development — education, new skills, mindset, self-awareness, therapy, reading, spiritual practice, creativity.",
+  fun_recreation: "Leisure & enjoyment — hobbies, travel, play, entertainment, spontaneity, work-life balance, things that recharge you.",
+  environment: "Your living & working spaces — home comfort, organization, neighborhood, commute, workspace setup, sense of safety.",
+};
 
 export default function Profile() {
   const { data, loading, updateProfile, updateLifeArea, updateIntake } = useProfile();
@@ -137,6 +149,16 @@ export default function Profile() {
                   <div className="flex items-center gap-2">
                     <span>{area.icon}</span>
                     <span className="text-sm font-medium">{area.name}</span>
+                    {AREA_HINTS[area.key] && (
+                      <Tooltip>
+                        <TooltipTrigger className="cursor-help">
+                          <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
+                        </TooltipTrigger>
+                        <TooltipContent side="right" className="max-w-xs">
+                          {AREA_HINTS[area.key]}
+                        </TooltipContent>
+                      </Tooltip>
+                    )}
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
