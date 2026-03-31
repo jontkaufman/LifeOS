@@ -30,6 +30,8 @@ export default function Goals() {
   const [showForm, setShowForm] = useState(false);
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
   const [expandedGoal, setExpandedGoal] = useState<number | null>(null);
+  const [draggedGoalId, setDraggedGoalId] = useState<number | null>(null);
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
 
   const areas = profileData?.life_areas || [];
 
@@ -47,6 +49,43 @@ export default function Goals() {
     const updates: Partial<Goal> & { progress?: number } = { status: newStatus };
     if (newStatus === 'completed') updates.progress = 100;
     updateGoal(goalId, updates);
+  };
+
+  const handleDragStart = (e: React.DragEvent, goalId: number) => {
+    setDraggedGoalId(goalId);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', String(goalId));
+  };
+
+  const handleDragOver = (e: React.DragEvent, columnKey: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dropTarget !== columnKey) setDropTarget(columnKey);
+  };
+
+  const handleDragLeave = (e: React.DragEvent, columnKey: string) => {
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const { clientX, clientY } = e;
+    if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) {
+      if (dropTarget === columnKey) setDropTarget(null);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent, columnKey: string) => {
+    e.preventDefault();
+    setDropTarget(null);
+    if (draggedGoalId !== null) {
+      const goal = goals.find(g => g.id === draggedGoalId);
+      if (goal && goal.status !== columnKey) {
+        moveGoal(draggedGoalId, columnKey);
+      }
+    }
+    setDraggedGoalId(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedGoalId(null);
+    setDropTarget(null);
   };
 
   return (
@@ -84,7 +123,13 @@ export default function Goals() {
             const ColIcon = col.icon;
             const columnGoals = goals.filter(g => g.status === col.key);
             return (
-              <div key={col.key} className={`w-72 shrink-0 flex flex-col rounded-lg border ${col.border} bg-card/30`}>
+              <div
+                key={col.key}
+                className={`w-72 shrink-0 flex flex-col rounded-lg border ${col.border} bg-card/30 transition-colors ${dropTarget === col.key ? 'border-primary/60 bg-primary/5' : ''}`}
+                onDragOver={e => handleDragOver(e, col.key)}
+                onDragLeave={e => handleDragLeave(e, col.key)}
+                onDrop={e => handleDrop(e, col.key)}
+              >
                 {/* Column header */}
                 <div className="px-3 py-2.5 border-b border-border/50 flex items-center gap-2">
                   <ColIcon className={`h-4 w-4 ${col.color}`} />
@@ -98,7 +143,13 @@ export default function Goals() {
                     const area = areas.find(a => a.id === goal.life_area_id);
                     const expanded = expandedGoal === goal.id;
                     return (
-                      <Card key={goal.id} className="border-border/50 bg-card">
+                      <Card
+                        key={goal.id}
+                        draggable
+                        onDragStart={e => handleDragStart(e, goal.id)}
+                        onDragEnd={handleDragEnd}
+                        className={`border-border/50 bg-card cursor-grab active:cursor-grabbing ${draggedGoalId === goal.id ? 'opacity-40' : ''}`}
+                      >
                         <CardContent className="p-3">
                           <div className="flex items-start gap-2">
                             <GripVertical className="h-4 w-4 mt-0.5 text-muted-foreground/30 shrink-0" />
