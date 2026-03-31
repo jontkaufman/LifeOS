@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Textarea } from '@/components/ui/textarea';
-import { CheckCircle2, Circle, Target, TrendingUp, Sparkles, Send, Loader2 } from 'lucide-react';
+import { CheckCircle2, Circle, Target, TrendingUp, Sparkles, Send, Loader2, RotateCcw } from 'lucide-react';
 import { RadarChart, PolarGrid, PolarAngleAxis, Radar, ResponsiveContainer } from 'recharts';
 import ReactMarkdown from 'react-markdown';
 
@@ -168,10 +168,12 @@ export default function Dashboard() {
   );
 }
 
+const DASHBOARD_CONVO_KEY = 'lifeos_dashboard_convo_id';
+
 function DashboardChat({ coachingMessage }: { coachingMessage: string | null }) {
   const {
     activeConvo, streaming, streamContent, toolActivity,
-    createConversation, sendMessage,
+    createConversation, loadConversation, sendMessage,
   } = useChat();
 
   const [input, setInput] = useState('');
@@ -179,16 +181,31 @@ function DashboardChat({ coachingMessage }: { coachingMessage: string | null }) 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  // Auto-create a check_in conversation on mount
+  // Load existing dashboard conversation or create a new one
   const initConvo = useCallback(async () => {
     if (initialized) return;
     setInitialized(true);
-    await createConversation('check_in');
-  }, [initialized, createConversation]);
+    const savedId = localStorage.getItem(DASHBOARD_CONVO_KEY);
+    if (savedId) {
+      try {
+        const convo = await loadConversation(Number(savedId));
+        if (convo && 'id' in convo && convo.messages) return;
+      } catch { /* conversation was deleted or errored, create new */ }
+      localStorage.removeItem(DASHBOARD_CONVO_KEY);
+    }
+    const convo = await createConversation('check_in');
+    if (convo) localStorage.setItem(DASHBOARD_CONVO_KEY, String(convo.id));
+  }, [initialized, createConversation, loadConversation]);
 
   useEffect(() => {
     initConvo();
   }, [initConvo]);
+
+  const handleReset = async () => {
+    localStorage.removeItem(DASHBOARD_CONVO_KEY);
+    const convo = await createConversation('check_in');
+    if (convo) localStorage.setItem(DASHBOARD_CONVO_KEY, String(convo.id));
+  };
 
   // Scroll to bottom on new messages
   useEffect(() => {
@@ -212,9 +229,14 @@ function DashboardChat({ coachingMessage }: { coachingMessage: string | null }) 
   return (
     <Card className="w-96 shrink-0 h-full flex flex-col">
       <CardHeader className="pb-3">
-        <CardTitle className="text-lg flex items-center gap-2">
-          <Sparkles className="h-5 w-5 text-primary" /> Coach
-        </CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-primary" /> Coach
+          </CardTitle>
+          <Button variant="ghost" size="icon" onClick={handleReset} disabled={streaming} className="h-7 w-7">
+            <RotateCcw className="h-3.5 w-3.5" />
+          </Button>
+        </div>
       </CardHeader>
 
       <CardContent className="flex-1 flex flex-col min-h-0 px-4 pb-4">
