@@ -6,12 +6,15 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Textarea } from '@/components/ui/textarea';
-import { CheckCircle2, Circle, Target, TrendingUp, Sparkles, Send, Loader2, RotateCcw } from 'lucide-react';
+import { CheckCircle2, Circle, Target, TrendingUp, Sparkles, Send, Loader2, RotateCcw, Pencil, Check, X } from 'lucide-react';
+import { Slider } from '@/components/ui/slider';
+import { sliderHandler } from '@/lib/ui-helpers';
+import { api } from '@/lib/api';
 import { RadarChart, PolarGrid, PolarAngleAxis, Radar, ResponsiveContainer } from 'recharts';
 import ReactMarkdown from 'react-markdown';
 
 export default function Dashboard() {
-  const { data, coachingMessage, loading, refreshCoachingMessage, toggleActionItem } = useDashboard();
+  const { data, coachingMessage, loading, refresh, refreshCoachingMessage, toggleActionItem } = useDashboard();
 
   useEffect(() => {
     refreshCoachingMessage();
@@ -107,18 +110,7 @@ export default function Dashboard() {
               {data.goals.length > 0 ? (
                 <div className="space-y-3">
                   {data.goals.slice(0, 5).map(goal => (
-                    <div key={goal.id} className="flex items-center gap-3">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{goal.title}</p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <Progress value={goal.progress} className="h-1.5 flex-1" />
-                          <span className="text-xs text-muted-foreground font-mono">{goal.progress}%</span>
-                        </div>
-                      </div>
-                      <Badge variant="outline" className="shrink-0 text-xs">
-                        {goal.priority}
-                      </Badge>
-                    </div>
+                    <DashboardGoalRow key={goal.id} goal={goal} onUpdate={refresh} />
                   ))}
                 </div>
               ) : (
@@ -315,6 +307,71 @@ function DashboardChat({ coachingMessage }: { coachingMessage: string | null }) 
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function DashboardGoalRow({ goal, onUpdate }: { goal: { id: number; title: string; status: string; progress: number; priority: string }; onUpdate: () => void }) {
+  const [editing, setEditing] = useState(false);
+  const [progress, setProgress] = useState(goal.progress);
+
+  const handleSave = async () => {
+    await api.put(`/goals/${goal.id}`, { progress });
+    setEditing(false);
+    onUpdate();
+  };
+
+  const handleComplete = async () => {
+    await api.put(`/goals/${goal.id}`, { status: 'completed', progress: 100 });
+    onUpdate();
+  };
+
+  if (editing) {
+    return (
+      <div className="space-y-2 p-2 rounded-lg bg-accent/30">
+        <p className="text-sm font-medium truncate">{goal.title}</p>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground w-16">Progress</span>
+          <Slider
+            value={[progress]}
+            onValueChange={sliderHandler(v => setProgress(v))}
+            min={0} max={100} step={5}
+            className="flex-1"
+          />
+          <span className="text-xs font-mono w-8 text-right">{progress}%</span>
+        </div>
+        <div className="flex gap-1 justify-end">
+          <Button size="sm" variant="ghost" onClick={() => { setProgress(goal.progress); setEditing(false); }} className="h-7 text-xs">
+            <X className="h-3 w-3 mr-1" /> Cancel
+          </Button>
+          <Button size="sm" onClick={handleSave} className="h-7 text-xs">
+            <Check className="h-3 w-3 mr-1" /> Save
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-3 group">
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium truncate">{goal.title}</p>
+        <div className="flex items-center gap-2 mt-1">
+          <Progress value={goal.progress} className="h-1.5 flex-1" />
+          <span className="text-xs text-muted-foreground font-mono">{goal.progress}%</span>
+        </div>
+      </div>
+      <Badge variant="outline" className="shrink-0 text-xs">
+        {goal.priority}
+      </Badge>
+      <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+        <Button size="icon" variant="ghost" onClick={() => setEditing(true)} className="h-7 w-7" title="Edit progress">
+          <Pencil className="h-3 w-3" />
+        </Button>
+        <Button size="icon" variant="ghost" onClick={handleComplete} className="h-7 w-7 text-green-400 hover:text-green-300" title="Mark complete">
+          <CheckCircle2 className="h-3 w-3" />
+        </Button>
+      </div>
+    </div>
   );
 }
 
