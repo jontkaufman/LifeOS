@@ -1,0 +1,14 @@
+data/*
+!data/.gitkeep
+node_modules/
+dist/
+__pycache__/
+*.pyc
+.env
+*.egg-info/
+.vite/
+.venv/
+.DS_Store
+*.db
+*.enc
+.keyfile
