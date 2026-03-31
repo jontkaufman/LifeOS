@@ -17,6 +17,8 @@ import {
 } from 'lucide-react';
 import { selectHandler, sliderHandler } from '@/lib/ui-helpers';
 
+const PRIORITY_ORDER: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+
 const COLUMNS = [
   { key: 'not_started', label: 'Not Started', icon: Circle, color: 'text-muted-foreground', border: 'border-border' },
   { key: 'in_progress', label: 'In Progress', icon: Clock, color: 'text-blue-400', border: 'border-blue-500/30' },
@@ -121,7 +123,8 @@ export default function Goals() {
         <div className="flex-1 flex gap-4 overflow-x-auto pb-2">
           {COLUMNS.map(col => {
             const ColIcon = col.icon;
-            const columnGoals = goals.filter(g => g.status === col.key);
+            const columnGoals = goals.filter(g => g.status === col.key)
+              .sort((a, b) => (PRIORITY_ORDER[a.priority] ?? 9) - (PRIORITY_ORDER[b.priority] ?? 9));
             return (
               <div
                 key={col.key}
