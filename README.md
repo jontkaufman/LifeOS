@@ -41,10 +41,10 @@ If you prefer to run without Docker, use the setup script:
 ```bash
 git clone https://github.com/jontkaufman/LifeOS.git
 cd LifeOS
-./setup.sh
+./run.sh
 ```
 
-The script checks for and installs all dependencies, then starts both the backend and frontend dev server.
+The script checks for and installs all dependencies (Python venv, backend packages, frontend packages), then prints instructions to start the servers.
 
 ### Prerequisites
 
