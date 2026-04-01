@@ -6,7 +6,7 @@ A self-hosted AI-powered life coaching platform. Set goals, track weekly reviews
 
 - **AI Coaching Chat** — Have conversations with an AI life coach across multiple modes (check-ins, goal reviews, deep sessions, brainstorming, accountability, and more)
 - **Dashboard** — See your Wheel of Life radar chart, latest review metrics, active goals, action items, and an interactive coaching chat pane
-- **Goal Tracking** — Create and track goals with progress, priority levels, and milestones
+- **Goal Tracking** — Kanban board with drag-and-drop, milestones, and priority sorting
 - **Weekly Reviews** — Structured weekly check-ins covering satisfaction, energy, stress, and mood
 - **Wheel of Life** — Rate and visualize importance vs. satisfaction across your life areas
 - **Coaching Style** — Customize how your AI coach communicates with you
@@ -15,15 +15,15 @@ A self-hosted AI-powered life coaching platform. Set goals, track weekly reviews
 
 ## Quick Start (Docker)
 
-The fastest way to get running. Requires [Docker](https://docs.docker.com/get-docker/).
+The fastest way to get running. Requires [Docker](https://docs.docker.com/get-docker/) and [Docker Compose](https://docs.docker.com/compose/install/).
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/LifeOS.git
+git clone https://github.com/jontkaufman/LifeOS.git
 cd LifeOS
-docker compose up -d
+docker compose up -d --build
 ```
 
-Open **http://localhost:8080** in your browser. The onboarding wizard will walk you through setting up your AI provider API key and profile.
+Open **http://localhost:8081** in your browser. The onboarding wizard will walk you through setting up your AI provider API key and profile.
 
 Your data is stored in the `data/` directory, which is mounted as a Docker volume and persists across restarts.
 
@@ -34,54 +34,59 @@ git pull
 docker compose up -d --build
 ```
 
-## Manual Setup (Development)
+## Quick Start (Local)
 
-If you want to run without Docker or contribute to the project.
+If you prefer to run without Docker, use the setup script:
+
+```bash
+git clone https://github.com/jontkaufman/LifeOS.git
+cd LifeOS
+./setup.sh
+```
+
+The script checks for and installs all dependencies, then starts both the backend and frontend dev server.
 
 ### Prerequisites
 
-- Python 3.11+
-- Node.js 20+
-- [uv](https://docs.astral.sh/uv/) (recommended) or pip
+The setup script will check for these and guide you through installing anything missing:
 
-### Backend
+| Dependency | Version | Purpose |
+|------------|---------|---------|
+| **Python** | 3.11+ | Backend runtime |
+| **Node.js** | 18+ | Frontend build and dev server |
+| **npm** | (comes with Node) | Frontend package manager |
+| **uv** | any | Python package manager (auto-installed by setup script) |
 
+### Manual Setup
+
+If you prefer to set things up yourself:
+
+**Backend:**
 ```bash
 cd backend
-
-# Create virtual environment and install dependencies
 uv venv .venv
 source .venv/bin/activate
 uv pip install -r requirements.txt
-
-# Start the backend (port 8080)
 python main.py
 ```
 
-### Frontend
-
-In a separate terminal:
-
+**Frontend** (separate terminal):
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
 
-The Vite dev server starts on **http://localhost:5173** and proxies `/api` requests to the backend at port 8080.
-
-For development, open **http://localhost:5173**.
+The Vite dev server starts on **http://localhost:5173** and proxies `/api` requests to the backend at port 8081.
 
 ### Building for Production
-
-To build the frontend and serve everything from the backend:
 
 ```bash
 cd frontend
 npm run build
 ```
 
-Then start the backend — it will serve the built frontend from `frontend/dist/` at **http://localhost:8080**.
+Then start the backend — it will serve the built frontend from `frontend/dist/` at **http://localhost:8081**.
 
 ## Configuration
 
@@ -119,6 +124,7 @@ LifeOS/
 │   │   └── lib/              # API client, WebSocket, utilities
 │   └── vite.config.ts
 ├── data/                     # SQLite DB + encrypted config (gitignored)
+├── setup.sh                  # Auto-install dependencies and start
 ├── docker-compose.yml
 ├── Dockerfile
 └── README.md
