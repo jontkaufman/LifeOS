@@ -11,7 +11,7 @@ interface DashboardGoal {
 }
 
 interface DashboardReview {
-  week_id: string;
+  date: string;
   life_satisfaction: number;
   energy_level: number;
   stress_level: number;

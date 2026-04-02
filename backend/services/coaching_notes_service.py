@@ -76,7 +76,7 @@ async def generate_review_notes(review_id: int):
         if not review:
             return
 
-        review_text = f"""Weekly Review ({review.week_id}):
+        review_text = f"""Review ({review.date}):
 Wins: {review.wins}
 Challenges: {review.challenges}
 Avoiding: {review.avoiding}

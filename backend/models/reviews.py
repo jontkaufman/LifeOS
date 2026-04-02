@@ -8,8 +8,8 @@ class Review(Base):
     __tablename__ = "reviews"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    review_type: Mapped[str] = mapped_column(String(20), default="weekly")
-    week_id: Mapped[str] = mapped_column(String(10))  # "2026-W14"
+    review_type: Mapped[str] = mapped_column(String(20), default="review")
+    week_id: Mapped[str | None] = mapped_column(String(10), nullable=True)
     date: Mapped[date] = mapped_column(Date)
     is_completed: Mapped[bool] = mapped_column(Boolean, default=False)
 

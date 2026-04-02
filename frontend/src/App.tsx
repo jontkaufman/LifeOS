@@ -9,6 +9,7 @@ import Reviews from '@/pages/Reviews';
 import Profile from '@/pages/Profile';
 import Coaching from '@/pages/Coaching';
 import Settings from '@/pages/Settings';
+import CalendarPage from '@/pages/Calendar';
 import Onboarding from '@/pages/Onboarding';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
@@ -60,6 +61,7 @@ export default function App() {
               <Route path="/profile" element={<Profile />} />
               <Route path="/coaching" element={<Coaching />} />
               <Route path="/settings" element={<Settings />} />
+              <Route path="/calendar" element={<CalendarPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
           )}

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useGoals, type Goal } from '@/hooks/useGoals';
 import { useProfile, type LifeArea } from '@/hooks/useProfile';
 import { Card, CardContent } from '@/components/ui/card';
@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Plus, Target, CheckCircle2, Circle, Clock, Pause,
-  Trash2, Edit2, GripVertical, ArrowRight,
+  Trash2, Edit2, GripVertical, ArrowRight, X,
 } from 'lucide-react';
 import { selectHandler, sliderHandler } from '@/lib/ui-helpers';
 
@@ -31,11 +31,23 @@ export default function Goals() {
   const { data: profileData } = useProfile();
   const [showForm, setShowForm] = useState(false);
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
-  const [expandedGoal, setExpandedGoal] = useState<number | null>(null);
+  const [selectedGoal, setSelectedGoal] = useState<Goal | null>(null);
   const [draggedGoalId, setDraggedGoalId] = useState<number | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
 
   const areas = profileData?.life_areas || [];
+
+  // Keep selectedGoal in sync with goals array
+  useEffect(() => {
+    if (selectedGoal) {
+      const fresh = goals.find(g => g.id === selectedGoal.id);
+      if (fresh) {
+        setSelectedGoal(fresh);
+      } else {
+        setSelectedGoal(null);
+      }
+    }
+  }, [goals]);
 
   const handleEdit = (goal: Goal) => {
     setEditingGoal(goal);
@@ -120,150 +132,234 @@ export default function Goals() {
       {loading ? (
         <div className="text-muted-foreground">Loading goals...</div>
       ) : (
-        <div className="flex-1 flex gap-4 overflow-x-auto pb-2">
-          {COLUMNS.map(col => {
-            const ColIcon = col.icon;
-            const columnGoals = goals.filter(g => g.status === col.key)
-              .sort((a, b) => (PRIORITY_ORDER[a.priority] ?? 9) - (PRIORITY_ORDER[b.priority] ?? 9));
-            return (
-              <div
-                key={col.key}
-                className={`w-72 shrink-0 flex flex-col rounded-lg border ${col.border} bg-card/30 transition-colors ${dropTarget === col.key ? 'border-primary/60 bg-primary/5' : ''}`}
-                onDragOver={e => handleDragOver(e, col.key)}
-                onDragLeave={e => handleDragLeave(e, col.key)}
-                onDrop={e => handleDrop(e, col.key)}
-              >
-                {/* Column header */}
-                <div className="px-3 py-2.5 border-b border-border/50 flex items-center gap-2">
-                  <ColIcon className={`h-4 w-4 ${col.color}`} />
-                  <span className="text-sm font-medium">{col.label}</span>
-                  <Badge variant="outline" className="text-[10px] ml-auto">{columnGoals.length}</Badge>
-                </div>
+        <div className="flex-1 flex overflow-hidden">
+          {/* Kanban columns */}
+          <div className="flex-1 flex gap-4 overflow-x-auto pb-2">
+            {COLUMNS.map(col => {
+              const ColIcon = col.icon;
+              const columnGoals = goals.filter(g => g.status === col.key)
+                .sort((a, b) => (PRIORITY_ORDER[a.priority] ?? 9) - (PRIORITY_ORDER[b.priority] ?? 9));
+              return (
+                <div
+                  key={col.key}
+                  className={`w-72 shrink-0 flex flex-col rounded-lg border ${col.border} bg-card/30 transition-colors ${dropTarget === col.key ? 'border-primary/60 bg-primary/5' : ''}`}
+                  onDragOver={e => handleDragOver(e, col.key)}
+                  onDragLeave={e => handleDragLeave(e, col.key)}
+                  onDrop={e => handleDrop(e, col.key)}
+                >
+                  {/* Column header */}
+                  <div className="px-3 py-2.5 border-b border-border/50 flex items-center gap-2">
+                    <ColIcon className={`h-4 w-4 ${col.color}`} />
+                    <span className="text-sm font-medium">{col.label}</span>
+                    <Badge variant="outline" className="text-[10px] ml-auto">{columnGoals.length}</Badge>
+                  </div>
 
-                {/* Cards */}
-                <div className="flex-1 overflow-y-auto p-2 space-y-2">
-                  {columnGoals.map(goal => {
-                    const area = areas.find(a => a.id === goal.life_area_id);
-                    const expanded = expandedGoal === goal.id;
-                    return (
-                      <Card
-                        key={goal.id}
-                        draggable
-                        onDragStart={e => handleDragStart(e, goal.id)}
-                        onDragEnd={handleDragEnd}
-                        className={`border-border/50 bg-card cursor-grab active:cursor-grabbing ${draggedGoalId === goal.id ? 'opacity-40' : ''}`}
-                      >
-                        <CardContent className="p-3">
-                          <div className="flex items-start gap-2">
-                            <GripVertical className="h-4 w-4 mt-0.5 text-muted-foreground/30 shrink-0" />
-                            <div className="flex-1 min-w-0">
-                              <button
-                                className="text-sm font-medium text-left w-full truncate hover:text-primary transition-colors"
-                                onClick={() => setExpandedGoal(expanded ? null : goal.id)}
-                              >
-                                {goal.title}
-                              </button>
-                              <div className="flex items-center gap-1.5 mt-1.5">
-                                {area && (
+                  {/* Cards */}
+                  <div className="flex-1 overflow-y-auto p-2 space-y-2">
+                    {columnGoals.map(goal => {
+                      const area = areas.find(a => a.id === goal.life_area_id);
+                      const isSelected = selectedGoal?.id === goal.id;
+                      return (
+                        <Card
+                          key={goal.id}
+                          draggable
+                          onDragStart={e => handleDragStart(e, goal.id)}
+                          onDragEnd={handleDragEnd}
+                          className={`border-border/50 bg-card cursor-grab active:cursor-grabbing ${draggedGoalId === goal.id ? 'opacity-40' : ''} ${isSelected ? 'ring-2 ring-primary' : ''}`}
+                        >
+                          <CardContent className="p-3">
+                            <div className="flex items-start gap-2">
+                              <GripVertical className="h-4 w-4 mt-0.5 text-muted-foreground/30 shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <button
+                                  className="text-sm font-medium text-left w-full truncate hover:text-primary transition-colors"
+                                  onClick={() => setSelectedGoal(isSelected ? null : goal)}
+                                >
+                                  {goal.title}
+                                </button>
+                                <div className="flex items-center gap-1.5 mt-1.5">
+                                  {area && (
+                                    <Badge variant="outline" className="text-[10px] px-1 py-0">
+                                      {area.icon} {area.name.split(' ')[0]}
+                                    </Badge>
+                                  )}
                                   <Badge variant="outline" className="text-[10px] px-1 py-0">
-                                    {area.icon} {area.name.split(' ')[0]}
+                                    {goal.priority}
                                   </Badge>
-                                )}
-                                <Badge variant="outline" className="text-[10px] px-1 py-0">
-                                  {goal.priority}
-                                </Badge>
-                              </div>
-                              <div className="flex items-center gap-2 mt-2">
-                                <Progress value={goal.progress} className="h-1 flex-1" />
-                                <span className="text-[10px] text-muted-foreground font-mono">{goal.progress}%</span>
-                              </div>
-                            </div>
-                          </div>
-
-                          {expanded && (
-                            <div className="mt-3 pt-3 border-t border-border/50 space-y-2.5">
-                              {goal.description && (
-                                <p className="text-xs text-muted-foreground">{goal.description}</p>
-                              )}
-                              {goal.purpose_why && (
-                                <p className="text-xs italic text-muted-foreground">Why: {goal.purpose_why}</p>
-                              )}
-                              {goal.target_date && (
-                                <p className="text-xs text-muted-foreground">Target: {goal.target_date}</p>
-                              )}
-
-                              {/* Milestones */}
-                              {goal.milestones.length > 0 && (
-                                <div className="space-y-1">
-                                  <p className="text-xs font-medium">Milestones</p>
-                                  {goal.milestones.map(m => (
-                                    <div key={m.id} className="flex items-center gap-1.5 text-xs">
-                                      <button onClick={() => updateMilestone(goal.id, m.id, { is_completed: !m.is_completed })}>
-                                        {m.is_completed
-                                          ? <CheckCircle2 className="h-3 w-3 text-primary" />
-                                          : <Circle className="h-3 w-3 text-muted-foreground" />
-                                        }
-                                      </button>
-                                      <span className={m.is_completed ? 'line-through text-muted-foreground' : ''}>{m.title}</span>
-                                      <button onClick={() => deleteMilestone(goal.id, m.id)} className="ml-auto text-muted-foreground hover:text-destructive">
-                                        <Trash2 className="h-2.5 w-2.5" />
-                                      </button>
-                                    </div>
-                                  ))}
                                 </div>
-                              )}
-
-                              <MilestoneAdder goalId={goal.id} onAdd={addMilestone} />
-
-                              {/* Move actions */}
-                              <div className="flex flex-wrap gap-1 pt-1">
-                                {col.key !== 'in_progress' && (
-                                  <Button size="sm" variant="outline" className="h-6 text-[10px] px-2" onClick={() => moveGoal(goal.id, 'in_progress')}>
-                                    <ArrowRight className="h-2.5 w-2.5 mr-1" /> Start
-                                  </Button>
-                                )}
-                                {col.key !== 'completed' && (
-                                  <Button size="sm" variant="outline" className="h-6 text-[10px] px-2" onClick={() => moveGoal(goal.id, 'completed')}>
-                                    <CheckCircle2 className="h-2.5 w-2.5 mr-1" /> Complete
-                                  </Button>
-                                )}
-                                {col.key === 'in_progress' && (
-                                  <Button size="sm" variant="outline" className="h-6 text-[10px] px-2" onClick={() => moveGoal(goal.id, 'paused')}>
-                                    <Pause className="h-2.5 w-2.5 mr-1" /> Pause
-                                  </Button>
-                                )}
-                                {col.key === 'paused' && (
-                                  <Button size="sm" variant="outline" className="h-6 text-[10px] px-2" onClick={() => moveGoal(goal.id, 'in_progress')}>
-                                    <ArrowRight className="h-2.5 w-2.5 mr-1" /> Resume
-                                  </Button>
-                                )}
-                                <div className="flex-1" />
-                                <Button size="sm" variant="ghost" className="h-6 text-[10px] px-1.5" onClick={() => handleEdit(goal)}>
-                                  <Edit2 className="h-2.5 w-2.5" />
-                                </Button>
-                                <Button size="sm" variant="ghost" className="h-6 text-[10px] px-1.5 text-destructive" onClick={() => deleteGoal(goal.id)}>
-                                  <Trash2 className="h-2.5 w-2.5" />
-                                </Button>
+                                <div className="flex items-center gap-2 mt-2">
+                                  <Progress value={goal.progress} className="h-1 flex-1" />
+                                  <span className="text-[10px] text-muted-foreground font-mono">{goal.progress}%</span>
+                                </div>
                               </div>
                             </div>
-                          )}
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
 
-                  {columnGoals.length === 0 && (
-                    <div className="text-center py-8 text-muted-foreground/40">
-                      <Target className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                      <p className="text-xs">No goals</p>
-                    </div>
-                  )}
+                    {columnGoals.length === 0 && (
+                      <div className="text-center py-8 text-muted-foreground/40">
+                        <Target className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                        <p className="text-xs">No goals</p>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
+
+          {/* Side panel */}
+          {selectedGoal && (
+            <GoalDetailPanel
+              goal={selectedGoal}
+              areas={areas}
+              onClose={() => setSelectedGoal(null)}
+              onEdit={handleEdit}
+              onMove={moveGoal}
+              onDelete={deleteGoal}
+              onAddMilestone={addMilestone}
+              onUpdateMilestone={updateMilestone}
+              onDeleteMilestone={deleteMilestone}
+            />
+          )}
         </div>
       )}
+    </div>
+  );
+}
+
+function GoalDetailPanel({ goal, areas, onClose, onEdit, onMove, onDelete, onAddMilestone, onUpdateMilestone, onDeleteMilestone }: {
+  goal: Goal;
+  areas: LifeArea[];
+  onClose: () => void;
+  onEdit: (goal: Goal) => void;
+  onMove: (goalId: number, status: string) => void;
+  onDelete: (goalId: number) => Promise<void>;
+  onAddMilestone: (goalId: number, data: { title: string }) => Promise<void>;
+  onUpdateMilestone: (goalId: number, milestoneId: number, updates: { is_completed?: boolean }) => Promise<void>;
+  onDeleteMilestone: (goalId: number, milestoneId: number) => Promise<void>;
+}) {
+  const area = areas.find(a => a.id === goal.life_area_id);
+
+  return (
+    <div className="w-[400px] shrink-0 ml-4 border border-border rounded-lg bg-card flex flex-col overflow-hidden">
+      {/* Sticky header */}
+      <div className="px-4 py-3 border-b border-border flex items-center gap-2 shrink-0">
+        <h3 className="font-medium text-sm flex-1 truncate">{goal.title}</h3>
+        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onEdit(goal)}>
+          <Edit2 className="h-3.5 w-3.5" />
+        </Button>
+        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose}>
+          <X className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+
+      {/* Scrollable content */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {/* Badges */}
+        <div className="flex flex-wrap gap-1.5">
+          <Badge variant="outline">{goal.status.replace('_', ' ')}</Badge>
+          <Badge variant="outline">{goal.priority}</Badge>
+          {area && <Badge variant="outline">{area.icon} {area.name}</Badge>}
+        </div>
+
+        {/* Progress */}
+        <div>
+          <div className="flex items-center justify-between text-xs mb-1">
+            <span className="text-muted-foreground">Progress</span>
+            <span className="font-mono">{goal.progress}%</span>
+          </div>
+          <Progress value={goal.progress} className="h-2" />
+        </div>
+
+        {/* Description */}
+        {goal.description && (
+          <div>
+            <Label className="text-xs text-muted-foreground">Description</Label>
+            <p className="text-sm mt-1">{goal.description}</p>
+          </div>
+        )}
+
+        {/* Purpose */}
+        {goal.purpose_why && (
+          <div>
+            <Label className="text-xs text-muted-foreground">Purpose / Why</Label>
+            <p className="text-sm mt-1 italic">{goal.purpose_why}</p>
+          </div>
+        )}
+
+        {/* Target date */}
+        {goal.target_date && (
+          <div>
+            <Label className="text-xs text-muted-foreground">Target Date</Label>
+            <p className="text-sm mt-1">{goal.target_date}</p>
+          </div>
+        )}
+
+        {/* Milestones */}
+        <div>
+          <Label className="text-xs text-muted-foreground">Milestones</Label>
+          <div className="mt-2 space-y-1.5">
+            {goal.milestones.map(m => (
+              <div key={m.id} className="flex items-center gap-2 text-sm">
+                <button onClick={() => onUpdateMilestone(goal.id, m.id, { is_completed: !m.is_completed })}>
+                  {m.is_completed
+                    ? <CheckCircle2 className="h-4 w-4 text-primary" />
+                    : <Circle className="h-4 w-4 text-muted-foreground" />
+                  }
+                </button>
+                <span className={`flex-1 ${m.is_completed ? 'line-through text-muted-foreground' : ''}`}>{m.title}</span>
+                <button onClick={() => onDeleteMilestone(goal.id, m.id)} className="text-muted-foreground hover:text-destructive">
+                  <Trash2 className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+            {goal.milestones.length === 0 && (
+              <p className="text-xs text-muted-foreground">No milestones yet.</p>
+            )}
+          </div>
+          <MilestoneAdder goalId={goal.id} onAdd={onAddMilestone} />
+        </div>
+
+        {/* Move actions */}
+        <div>
+          <Label className="text-xs text-muted-foreground">Move To</Label>
+          <div className="flex flex-wrap gap-1.5 mt-2">
+            {goal.status !== 'in_progress' && (
+              <Button size="sm" variant="outline" className="text-xs" onClick={() => onMove(goal.id, 'in_progress')}>
+                <ArrowRight className="h-3 w-3 mr-1" /> Start
+              </Button>
+            )}
+            {goal.status !== 'completed' && (
+              <Button size="sm" variant="outline" className="text-xs" onClick={() => onMove(goal.id, 'completed')}>
+                <CheckCircle2 className="h-3 w-3 mr-1" /> Complete
+              </Button>
+            )}
+            {goal.status === 'in_progress' && (
+              <Button size="sm" variant="outline" className="text-xs" onClick={() => onMove(goal.id, 'paused')}>
+                <Pause className="h-3 w-3 mr-1" /> Pause
+              </Button>
+            )}
+            {goal.status === 'paused' && (
+              <Button size="sm" variant="outline" className="text-xs" onClick={() => onMove(goal.id, 'in_progress')}>
+                <ArrowRight className="h-3 w-3 mr-1" /> Resume
+              </Button>
+            )}
+            {goal.status !== 'not_started' && (
+              <Button size="sm" variant="outline" className="text-xs" onClick={() => onMove(goal.id, 'not_started')}>
+                Reset
+              </Button>
+            )}
+          </div>
+        </div>
+
+        {/* Delete */}
+        <Button variant="outline" size="sm" className="w-full text-destructive hover:text-destructive" onClick={() => onDelete(goal.id)}>
+          <Trash2 className="h-3.5 w-3.5 mr-1" /> Delete Goal
+        </Button>
+      </div>
     </div>
   );
 }
@@ -380,19 +476,19 @@ function MilestoneAdder({ goalId, onAdd }: { goalId: number; onAdd: (goalId: num
 
   if (!show) {
     return (
-      <Button variant="ghost" size="sm" className="text-[10px] text-muted-foreground h-6" onClick={() => setShow(true)}>
-        <Plus className="h-2.5 w-2.5 mr-1" /> Add milestone
+      <Button variant="ghost" size="sm" className="text-xs text-muted-foreground mt-2" onClick={() => setShow(true)}>
+        <Plus className="h-3 w-3 mr-1" /> Add milestone
       </Button>
     );
   }
 
   return (
-    <div className="flex gap-1.5">
+    <div className="flex gap-1.5 mt-2">
       <Input
         value={title}
         onChange={e => setTitle(e.target.value)}
         placeholder="Milestone..."
-        className="h-6 text-xs"
+        className="h-7 text-xs"
         onKeyDown={e => {
           if (e.key === 'Enter' && title.trim()) {
             onAdd(goalId, { title: title.trim() });
@@ -400,7 +496,7 @@ function MilestoneAdder({ goalId, onAdd }: { goalId: number; onAdd: (goalId: num
           }
         }}
       />
-      <Button size="sm" className="h-6 text-[10px] px-2" onClick={() => { if (title.trim()) { onAdd(goalId, { title: title.trim() }); setTitle(''); } }}>
+      <Button size="sm" className="h-7 text-xs px-2" onClick={() => { if (title.trim()) { onAdd(goalId, { title: title.trim() }); setTitle(''); } }}>
         Add
       </Button>
     </div>

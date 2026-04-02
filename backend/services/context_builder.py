@@ -71,7 +71,7 @@ async def build_user_context(db: AsyncSession) -> str:
     result = await db.execute(select(Review).where(Review.is_completed == True).order_by(Review.date.desc()).limit(1))
     review = result.scalar_one_or_none()
     if review:
-        parts.append(f"Latest Review ({review.week_id}): satisfaction={review.life_satisfaction}/10, energy={review.energy_level}/10, stress={review.stress_level}/10, mood={review.overall_mood}")
+        parts.append(f"Latest Review ({review.date}): satisfaction={review.life_satisfaction}/10, energy={review.energy_level}/10, stress={review.stress_level}/10, mood={review.overall_mood}")
 
     # Active coaching notes
     result = await db.execute(

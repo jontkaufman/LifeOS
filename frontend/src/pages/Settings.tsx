@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Slider } from '@/components/ui/slider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { CheckCircle2, XCircle, Eye, EyeOff, Download, Upload, Loader2 } from 'lucide-react';
+import { CheckCircle2, XCircle, Eye, EyeOff, Download, Upload, Loader2, Calendar } from 'lucide-react';
 import { selectHandler, sliderHandler } from '@/lib/ui-helpers';
 
 interface Settings {
@@ -28,6 +28,11 @@ interface ConfiguredProvider {
   configured: boolean;
 }
 
+interface CalendarStatus {
+  credentials_configured: boolean;
+  connected: boolean;
+}
+
 const MODEL_OPTIONS: Record<string, string[]> = {
   anthropic: ['claude-sonnet-4-5-20250929', 'claude-haiku-4-5-20251001', 'claude-opus-4-5-20250714'],
   openai: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'o1'],
@@ -44,10 +49,29 @@ export default function Settings() {
   const [testResult, setTestResult] = useState<{ valid: boolean; error?: string } | null>(null);
   const [coachingNotes, setCoachingNotes] = useState<Array<{ id: number; note_type: string; content: string; source_type: string }>>([]);
 
+  // Calendar state
+  const [calendarStatus, setCalendarStatus] = useState<CalendarStatus | null>(null);
+  const [savingCreds, setSavingCreds] = useState(false);
+
+  // Check for google=connected URL param
+  const [defaultTab, setDefaultTab] = useState('api');
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('tab') === 'integrations') {
+      setDefaultTab('integrations');
+    }
+    if (params.get('google') === 'connected' || params.get('google') === 'error') {
+      setDefaultTab('integrations');
+      // Clean up URL
+      window.history.replaceState({}, '', '/settings');
+    }
+  }, []);
+
   useEffect(() => {
     loadSettings();
     loadProviders();
     loadCoachingNotes();
+    loadCalendarStatus();
   }, []);
 
   const loadSettings = async () => {
@@ -62,6 +86,12 @@ export default function Settings() {
     try {
       const n = await api.get<Array<{ id: number; note_type: string; content: string; source_type: string }>>('/coaching/notes');
       setCoachingNotes(n);
+    } catch { /* ok */ }
+  };
+  const loadCalendarStatus = async () => {
+    try {
+      const s = await api.get<CalendarStatus>('/calendar/status');
+      setCalendarStatus(s);
     } catch { /* ok */ }
   };
 
@@ -110,14 +140,35 @@ export default function Settings() {
     window.location.reload();
   };
 
+  const saveGoogleCredentials = async (clientId: string, clientSecret: string) => {
+    setSavingCreds(true);
+    await api.post('/calendar/credentials', { client_id: clientId, client_secret: clientSecret });
+    setSavingCreds(false);
+    loadCalendarStatus();
+  };
+
+  const connectGoogle = async () => {
+    const origin = encodeURIComponent(window.location.origin);
+    const result = await api.get<{ url?: string; error?: string }>(`/calendar/auth-url?origin=${origin}`);
+    if (result.url) {
+      window.location.href = result.url;
+    }
+  };
+
+  const disconnectGoogle = async () => {
+    await api.delete('/calendar/disconnect');
+    loadCalendarStatus();
+  };
+
   if (!settings) return <div className="text-muted-foreground">Loading settings...</div>;
 
   return (
     <div className="max-w-3xl space-y-6">
-      <Tabs defaultValue="api">
+      <Tabs defaultValue={defaultTab}>
         <TabsList>
           <TabsTrigger value="api">API Keys</TabsTrigger>
           <TabsTrigger value="ai">AI Settings</TabsTrigger>
+          <TabsTrigger value="integrations">Integrations</TabsTrigger>
           <TabsTrigger value="notes">Coaching Notes</TabsTrigger>
           <TabsTrigger value="data">Data</TabsTrigger>
         </TabsList>
@@ -275,6 +326,43 @@ export default function Settings() {
           </Card>
         </TabsContent>
 
+        <TabsContent value="integrations" className="space-y-4 mt-4">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-3">
+                <Calendar className="h-5 w-5" />
+                <div>
+                  <CardTitle>Google Calendar</CardTitle>
+                  <CardDescription>Connect your Google Calendar to see upcoming events on your dashboard.</CardDescription>
+                </div>
+                <div className="ml-auto">
+                  {calendarStatus?.connected ? (
+                    <Badge className="bg-green-500/10 text-green-400"><CheckCircle2 className="h-3 w-3 mr-1" /> Connected</Badge>
+                  ) : (
+                    <Badge variant="secondary">Not Connected</Badge>
+                  )}
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {calendarStatus?.connected ? (
+                <Button variant="outline" onClick={disconnectGoogle} className="text-destructive hover:text-destructive">
+                  Disconnect
+                </Button>
+              ) : calendarStatus?.credentials_configured ? (
+                <Button onClick={connectGoogle} size="lg">
+                  <Calendar className="h-4 w-4 mr-2" /> Sign in with Google
+                </Button>
+              ) : (
+                <GoogleCalendarSetup
+                  onSave={saveGoogleCredentials}
+                  saving={savingCreds}
+                />
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         <TabsContent value="notes" className="space-y-4 mt-4">
           <Card>
             <CardHeader>
@@ -324,6 +412,57 @@ export default function Settings() {
           </Card>
         </TabsContent>
       </Tabs>
+    </div>
+  );
+}
+
+function GoogleCalendarSetup({ onSave, saving }: { onSave: (clientId: string, clientSecret: string) => Promise<void>; saving: boolean }) {
+  const [clientId, setClientId] = useState('');
+  const [clientSecret, setClientSecret] = useState('');
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-muted-foreground">
+        To connect Google Calendar, you need to set up OAuth credentials first. You can either set <code className="text-xs bg-background px-1 py-0.5 rounded">GOOGLE_CLIENT_ID</code> and <code className="text-xs bg-background px-1 py-0.5 rounded">GOOGLE_CLIENT_SECRET</code> environment variables, or enter them below.
+      </p>
+      <div className="space-y-3">
+        <div>
+          <Label className="text-sm">Client ID</Label>
+          <Input
+            value={clientId}
+            onChange={e => setClientId(e.target.value)}
+            placeholder="your-app.apps.googleusercontent.com"
+            className="mt-1"
+          />
+        </div>
+        <div>
+          <Label className="text-sm">Client Secret</Label>
+          <Input
+            type="password"
+            value={clientSecret}
+            onChange={e => setClientSecret(e.target.value)}
+            placeholder="GOCSPX-..."
+            className="mt-1"
+          />
+        </div>
+        <Button
+          onClick={() => onSave(clientId, clientSecret)}
+          disabled={!clientId.trim() || !clientSecret.trim() || saving}
+        >
+          Save & Continue
+        </Button>
+      </div>
+      <div className="p-3 bg-accent rounded-lg text-sm space-y-2">
+        <p className="font-medium">Setup Instructions</p>
+        <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
+          <li>Go to console.cloud.google.com and create a project</li>
+          <li>Enable the Google Calendar API</li>
+          <li>Go to Credentials → Create Credentials → OAuth client ID</li>
+          <li>Application type: Web application</li>
+          <li>Add authorized redirect URI: <code className="text-xs bg-background px-1 py-0.5 rounded">{window.location.origin}/api/calendar/oauth/callback</code></li>
+          <li>Copy the Client ID and Client Secret above</li>
+        </ol>
+      </div>
     </div>
   );
 }

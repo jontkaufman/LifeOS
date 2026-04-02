@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Textarea } from '@/components/ui/textarea';
-import { CheckCircle2, Circle, Target, TrendingUp, Sparkles, Send, Loader2, RotateCcw, Pencil, Check, X } from 'lucide-react';
+import { CheckCircle2, Circle, Target, TrendingUp, Sparkles, Send, Loader2, RotateCcw, Pencil, Check, X, Calendar as CalendarIcon } from 'lucide-react';
 import { Slider } from '@/components/ui/slider';
 import { sliderHandler } from '@/lib/ui-helpers';
 import { api } from '@/lib/api';
@@ -70,7 +70,9 @@ export default function Dashboard() {
               {data.latest_review ? (
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">{data.latest_review.week_id}</span>
+                    <span className="text-sm text-muted-foreground">{
+                      (() => { try { return new Date(data.latest_review.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); } catch { return data.latest_review.date; } })()
+                    }</span>
                     <Badge variant={data.latest_review.is_completed ? 'default' : 'secondary'}>
                       {data.latest_review.is_completed ? 'Completed' : 'In Progress'}
                     </Badge>
@@ -95,7 +97,7 @@ export default function Dashboard() {
                   </div>
                 </div>
               ) : (
-                <p className="text-muted-foreground text-sm">No reviews yet. Start your first weekly review!</p>
+                <p className="text-muted-foreground text-sm">No reviews yet. Start your first review!</p>
               )}
             </CardContent>
           </Card>
@@ -120,38 +122,42 @@ export default function Dashboard() {
           </Card>
         </div>
 
-        {/* Action Items - full width */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <TrendingUp className="h-5 w-5" /> Action Items
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {data.action_items.length > 0 ? (
-              <div className="space-y-2">
-                {data.action_items.map(item => (
-                  <button
-                    key={item.id}
-                    onClick={() => toggleActionItem(item.id)}
-                    className="flex items-center gap-2 w-full text-left p-2 rounded hover:bg-accent transition-colors"
-                  >
-                    {item.is_completed ? (
-                      <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />
-                    ) : (
-                      <Circle className="h-4 w-4 text-muted-foreground shrink-0" />
-                    )}
-                    <span className={`text-sm ${item.is_completed ? 'line-through text-muted-foreground' : ''}`}>
-                      {item.text}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <p className="text-muted-foreground text-sm">No action items yet. They'll appear from your coaching conversations.</p>
-            )}
-          </CardContent>
-        </Card>
+        {/* Action Items + Calendar - 2 col grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <TrendingUp className="h-5 w-5" /> Action Items
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {data.action_items.length > 0 ? (
+                <div className="space-y-2">
+                  {data.action_items.map(item => (
+                    <button
+                      key={item.id}
+                      onClick={() => toggleActionItem(item.id)}
+                      className="flex items-center gap-2 w-full text-left p-2 rounded hover:bg-accent transition-colors"
+                    >
+                      {item.is_completed ? (
+                        <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />
+                      ) : (
+                        <Circle className="h-4 w-4 text-muted-foreground shrink-0" />
+                      )}
+                      <span className={`text-sm ${item.is_completed ? 'line-through text-muted-foreground' : ''}`}>
+                        {item.text}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-muted-foreground text-sm">No action items yet. They'll appear from your coaching conversations.</p>
+              )}
+            </CardContent>
+          </Card>
+
+          <CalendarWidget />
+        </div>
       </div>
 
       {/* Chat Pane */}
@@ -372,6 +378,67 @@ function DashboardGoalRow({ goal, onUpdate }: { goal: { id: number; title: strin
         </Button>
       </div>
     </div>
+  );
+}
+
+interface CalendarEvent {
+  id: string;
+  summary: string;
+  start: string;
+  end: string;
+  all_day: boolean;
+  location: string | null;
+}
+
+function CalendarWidget() {
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    api.get<CalendarEvent[] | { error: string; events: CalendarEvent[] }>('/calendar/events?days=7')
+      .then(result => {
+        if (Array.isArray(result)) {
+          setEvents(result);
+        } else if ('events' in result) {
+          setEvents(result.events);
+        }
+        setLoaded(true);
+      })
+      .catch(() => setLoaded(true));
+  }, []);
+
+  if (!loaded || events.length === 0) return null;
+
+  const formatEventTime = (start: string, allDay: boolean) => {
+    if (allDay) return 'All day';
+    try {
+      return new Date(start).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    } catch {
+      return start;
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-lg flex items-center gap-2">
+          <CalendarIcon className="h-5 w-5" /> Upcoming Events
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-3">
+          {events.slice(0, 5).map(event => (
+            <div key={event.id} className="flex items-start gap-3">
+              <div className="w-1 h-8 bg-primary/50 rounded-full shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                <p className="text-sm font-medium truncate">{event.summary}</p>
+                <p className="text-xs text-muted-foreground">{formatEventTime(event.start, event.all_day)}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

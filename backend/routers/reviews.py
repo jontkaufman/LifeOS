@@ -1,5 +1,5 @@
 from datetime import datetime, date
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from database import get_db
@@ -7,11 +7,6 @@ from models.reviews import Review, ReviewAreaScore
 from models.profile import LifeArea
 
 router = APIRouter()
-
-
-def get_week_id(d: date = None) -> str:
-    d = d or date.today()
-    return f"{d.isocalendar()[0]}-W{d.isocalendar()[1]:02d}"
 
 
 def review_to_dict(r, area_scores=None):
@@ -40,42 +35,39 @@ async def get_reviews(limit: int = 20, offset: int = 0, db: AsyncSession = Depen
     return out
 
 
-@router.get("/current")
-async def get_current_review(db: AsyncSession = Depends(get_db)):
-    week_id = get_week_id()
-    result = await db.execute(select(Review).where(Review.week_id == week_id))
-    review = result.scalar_one_or_none()
-    if not review:
-        review = Review(week_id=week_id, date=date.today())
-        db.add(review)
-        await db.flush()
-        # Seed area scores
-        areas_result = await db.execute(select(LifeArea).where(LifeArea.is_active == True))
-        areas = areas_result.scalars().all()
-        # Get previous review for previous scores
-        prev_result = await db.execute(select(Review).where(Review.week_id != week_id).order_by(Review.date.desc()).limit(1))
-        prev_review = prev_result.scalar_one_or_none()
-        prev_scores = {}
-        if prev_review:
-            prev_scores_result = await db.execute(select(ReviewAreaScore).where(ReviewAreaScore.review_id == prev_review.id))
-            for ps in prev_scores_result.scalars().all():
-                prev_scores[ps.life_area_id] = ps.score
-        for area in areas:
-            score = ReviewAreaScore(
-                review_id=review.id,
-                life_area_id=area.id,
-                score=5,
-                previous_score=prev_scores.get(area.id),
-            )
-            db.add(score)
-        await db.commit()
-        await db.refresh(review)
-        # Re-fetch with area_scores loaded
-        result = await db.execute(select(Review).where(Review.id == review.id))
-        review = result.scalar_one()
+@router.post("")
+async def create_review(db: AsyncSession = Depends(get_db)):
+    review = Review(date=date.today())
+    db.add(review)
+    await db.flush()
+
+    # Seed area scores from active life areas
+    areas_result = await db.execute(select(LifeArea).where(LifeArea.is_active == True))
+    areas = areas_result.scalars().all()
+
+    # Get previous review for previous scores
+    prev_result = await db.execute(select(Review).where(Review.id != review.id).order_by(Review.date.desc()).limit(1))
+    prev_review = prev_result.scalar_one_or_none()
+    prev_scores = {}
+    if prev_review:
+        prev_scores_result = await db.execute(select(ReviewAreaScore).where(ReviewAreaScore.review_id == prev_review.id))
+        for ps in prev_scores_result.scalars().all():
+            prev_scores[ps.life_area_id] = ps.score
+
+    for area in areas:
+        score = ReviewAreaScore(
+            review_id=review.id,
+            life_area_id=area.id,
+            score=5,
+            previous_score=prev_scores.get(area.id),
+        )
+        db.add(score)
+
+    await db.commit()
+    await db.refresh(review)
+
     scores_result = await db.execute(select(ReviewAreaScore).where(ReviewAreaScore.review_id == review.id))
-    area_scores = scores_result.scalars().all()
-    return review_to_dict(review, area_scores)
+    return review_to_dict(review, scores_result.scalars().all())
 
 
 @router.get("/trends")
@@ -87,7 +79,6 @@ async def get_trends(db: AsyncSession = Depends(get_db)):
         scores_result = await db.execute(select(ReviewAreaScore).where(ReviewAreaScore.review_id == r.id))
         area_scores = scores_result.scalars().all()
         trends.append({
-            "week_id": r.week_id,
             "date": str(r.date),
             "life_satisfaction": r.life_satisfaction,
             "alignment_score": r.alignment_score,
@@ -136,6 +127,19 @@ async def update_review(review_id: int, data: dict, db: AsyncSession = Depends(g
                 score.score = score_data["score"]
                 if "note" in score_data:
                     score.note = score_data["note"]
+    await db.commit()
+    return {"status": "ok"}
+
+
+@router.delete("/{review_id}")
+async def delete_review(review_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Review).where(Review.id == review_id))
+    review = result.scalar_one_or_none()
+    if not review:
+        raise HTTPException(status_code=404, detail="Review not found")
+    if review.is_completed:
+        raise HTTPException(status_code=400, detail="Cannot delete a completed review")
+    await db.delete(review)
     await db.commit()
     return {"status": "ok"}
 

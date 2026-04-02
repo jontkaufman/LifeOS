@@ -1,15 +1,20 @@
+import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
+import { api } from '@/lib/api';
 import {
   LayoutDashboard, User, Target, MessageSquare,
-  ClipboardList, Settings, Compass, Sparkles,
+  ClipboardList, Settings, Compass, Sparkles, Calendar,
 } from 'lucide-react';
 
-const navItems = [
+const baseNavItems = [
   { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { path: '/chat', icon: MessageSquare, label: 'Coach Chat' },
   { path: '/goals', icon: Target, label: 'Goals' },
   { path: '/reviews', icon: ClipboardList, label: 'Reviews' },
+];
+
+const bottomNavItems = [
   { path: '/profile', icon: User, label: 'Profile' },
   { path: '/coaching', icon: Sparkles, label: 'Coaching Style' },
   { path: '/settings', icon: Settings, label: 'Settings' },
@@ -17,6 +22,19 @@ const navItems = [
 
 export function Sidebar() {
   const location = useLocation();
+  const [calendarConnected, setCalendarConnected] = useState(false);
+
+  useEffect(() => {
+    api.get<{ connected: boolean }>('/calendar/status')
+      .then(res => setCalendarConnected(res.connected))
+      .catch(() => {});
+  }, []);
+
+  const navItems = [
+    ...baseNavItems,
+    ...(calendarConnected ? [{ path: '/calendar', icon: Calendar, label: 'Calendar' }] : []),
+    ...bottomNavItems,
+  ];
 
   return (
     <aside className="fixed left-0 top-0 h-full w-64 bg-sidebar border-r border-sidebar-border flex flex-col z-50">

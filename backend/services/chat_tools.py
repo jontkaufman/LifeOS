@@ -71,8 +71,8 @@ TOOLS = [
         },
     },
     {
-        "name": "get_current_review",
-        "description": "Get the current (most recent or in-progress) weekly review with area scores.",
+        "name": "get_latest_review",
+        "description": "Get the most recent review with area scores.",
         "parameters": {
             "type": "object",
             "properties": {},
@@ -81,7 +81,7 @@ TOOLS = [
     },
     {
         "name": "update_review",
-        "description": "Update fields on a weekly review (gratitude, wins, challenges, scores, etc).",
+        "description": "Update fields on a review (gratitude, wins, challenges, scores, etc).",
         "parameters": {
             "type": "object",
             "properties": {
@@ -121,7 +121,7 @@ TOOLS = [
     },
     {
         "name": "complete_review",
-        "description": "Mark a weekly review as completed.",
+        "description": "Mark a review as completed.",
         "parameters": {
             "type": "object",
             "properties": {
@@ -174,6 +174,61 @@ TOOLS = [
             "required": ["life_area_id"],
         },
     },
+    {
+        "name": "list_calendar_events",
+        "description": "List upcoming Google Calendar events. Use when the user asks about their schedule, upcoming events, or calendar.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "days": {"type": "integer", "description": "Number of days ahead to fetch (default 7)"},
+            },
+            "required": [],
+        },
+    },
+    {
+        "name": "create_calendar_event",
+        "description": "Create a new event on the user's Google Calendar. Use when they want to schedule something.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "summary": {"type": "string", "description": "Event title"},
+                "start": {"type": "string", "description": "Start time as ISO 8601 datetime (e.g. '2025-01-15T09:00:00-05:00') or YYYY-MM-DD for all-day events"},
+                "end": {"type": "string", "description": "End time as ISO 8601 datetime or YYYY-MM-DD for all-day events"},
+                "description": {"type": "string", "description": "Event description/notes"},
+                "location": {"type": "string", "description": "Event location"},
+                "all_day": {"type": "boolean", "description": "Whether this is an all-day event"},
+            },
+            "required": ["summary", "start", "end"],
+        },
+    },
+    {
+        "name": "update_calendar_event",
+        "description": "Update an existing Google Calendar event. Only provided fields are changed.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "event_id": {"type": "string", "description": "Google Calendar event ID"},
+                "summary": {"type": "string", "description": "New event title"},
+                "start": {"type": "string", "description": "New start time (ISO 8601)"},
+                "end": {"type": "string", "description": "New end time (ISO 8601)"},
+                "description": {"type": "string", "description": "New description"},
+                "location": {"type": "string", "description": "New location"},
+                "all_day": {"type": "boolean"},
+            },
+            "required": ["event_id"],
+        },
+    },
+    {
+        "name": "delete_calendar_event",
+        "description": "Delete an event from the user's Google Calendar. Always confirm with the user before calling this.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "event_id": {"type": "string", "description": "Google Calendar event ID to delete"},
+            },
+            "required": ["event_id"],
+        },
+    },
 ]
 
 
@@ -217,12 +272,16 @@ TOOL_DISPLAY_NAMES: dict[str, str] = {
     "create_goal": "Creating goal",
     "update_goal": "Updating goal",
     "delete_goal": "Deleting goal",
-    "get_current_review": "Loading review",
+    "get_latest_review": "Loading review",
     "update_review": "Updating review",
     "complete_review": "Completing review",
     "get_profile": "Loading profile",
     "update_profile": "Updating profile",
     "update_life_area": "Updating life area",
+    "list_calendar_events": "Checking calendar",
+    "create_calendar_event": "Creating event",
+    "update_calendar_event": "Updating event",
+    "delete_calendar_event": "Deleting event",
 }
 
 
@@ -237,12 +296,16 @@ async def execute_tool(name: str, args: dict, db: AsyncSession) -> dict:
         "create_goal": _handle_create_goal,
         "update_goal": _handle_update_goal,
         "delete_goal": _handle_delete_goal,
-        "get_current_review": _handle_get_current_review,
+        "get_latest_review": _handle_get_latest_review,
         "update_review": _handle_update_review,
         "complete_review": _handle_complete_review,
         "get_profile": _handle_get_profile,
         "update_profile": _handle_update_profile,
         "update_life_area": _handle_update_life_area,
+        "list_calendar_events": _handle_list_calendar_events,
+        "create_calendar_event": _handle_create_calendar_event,
+        "update_calendar_event": _handle_update_calendar_event,
+        "delete_calendar_event": _handle_delete_calendar_event,
     }
     handler = handlers.get(name)
     if not handler:
@@ -365,7 +428,7 @@ async def _handle_delete_goal(args: dict, db: AsyncSession) -> dict:
 
 # -- Review handlers --
 
-async def _handle_get_current_review(args: dict, db: AsyncSession) -> dict:
+async def _handle_get_latest_review(args: dict, db: AsyncSession) -> dict:
     from models.reviews import Review, ReviewAreaScore
 
     result = await db.execute(
@@ -376,7 +439,7 @@ async def _handle_get_current_review(args: dict, db: AsyncSession) -> dict:
     )
     review = result.scalar_one_or_none()
     if not review:
-        return {"error": "No reviews found. The user hasn't started any weekly reviews yet."}
+        return {"error": "No reviews found. The user hasn't started any reviews yet."}
 
     scores = [
         {"life_area_id": s.life_area_id, "score": s.score, "note": s.note or ""}
@@ -385,7 +448,7 @@ async def _handle_get_current_review(args: dict, db: AsyncSession) -> dict:
 
     return {
         "id": review.id,
-        "week_id": review.week_id,
+        "date": str(review.date),
         "is_completed": review.is_completed,
         "gratitude_1": review.gratitude_1,
         "gratitude_2": review.gratitude_2,
@@ -550,3 +613,57 @@ async def _handle_update_life_area(args: dict, db: AsyncSession) -> dict:
 
     await db.commit()
     return {"status": "updated"}
+
+
+# -- Calendar handlers --
+
+async def _handle_list_calendar_events(args: dict, db: AsyncSession) -> dict:
+    from services.google_calendar import fetch_events
+    days = args.get("days", 7)
+    try:
+        events = await fetch_events(days_ahead=days)
+        return {"events": events}
+    except ValueError as e:
+        return {"error": str(e)}
+
+
+async def _handle_create_calendar_event(args: dict, db: AsyncSession) -> dict:
+    from services.google_calendar import create_event
+    try:
+        event = await create_event(
+            summary=args["summary"],
+            start=args["start"],
+            end=args["end"],
+            description=args.get("description", ""),
+            location=args.get("location", ""),
+            all_day=args.get("all_day", False),
+        )
+        return event
+    except Exception as e:
+        return {"error": str(e)}
+
+
+async def _handle_update_calendar_event(args: dict, db: AsyncSession) -> dict:
+    from services.google_calendar import update_event
+    try:
+        event = await update_event(
+            event_id=args["event_id"],
+            summary=args.get("summary"),
+            start=args.get("start"),
+            end=args.get("end"),
+            description=args.get("description"),
+            location=args.get("location"),
+            all_day=args.get("all_day"),
+        )
+        return event
+    except Exception as e:
+        return {"error": str(e)}
+
+
+async def _handle_delete_calendar_event(args: dict, db: AsyncSession) -> dict:
+    from services.google_calendar import delete_event
+    try:
+        await delete_event(args["event_id"])
+        return {"status": "deleted"}
+    except Exception as e:
+        return {"error": str(e)}

@@ -13,7 +13,7 @@ interface AreaScore {
 interface Review {
   id: number;
   review_type: string;
-  week_id: string;
+  week_id: string | null;
   date: string;
   is_completed: boolean;
   gratitude_1: string;
@@ -62,18 +62,20 @@ function useDebouncedSave() {
 
 export function useReviews() {
   const [reviews, setReviews] = useState<Review[]>([]);
-  const [current, setCurrent] = useState<Review | null>(null);
+  const [activeReview, setActiveReview] = useState<Review | null>(null);
   const [loading, setLoading] = useState(true);
   const debouncedSave = useDebouncedSave();
 
   const refresh = useCallback(async () => {
     try {
-      const [list, curr] = await Promise.all([
-        api.get<Review[]>('/reviews'),
-        api.get<Review>('/reviews/current'),
-      ]);
+      const list = await api.get<Review[]>('/reviews');
       setReviews(list);
-      setCurrent(curr);
+      // Keep activeReview in sync with fresh data
+      setActiveReview(prev => {
+        if (!prev) return null;
+        const fresh = list.find(r => r.id === prev.id);
+        return fresh || null;
+      });
     } catch (e) {
       console.error('Failed to load reviews:', e);
     } finally {
@@ -82,6 +84,19 @@ export function useReviews() {
   }, []);
 
   useEffect(() => { refresh(); }, [refresh]);
+
+  const createReview = async () => {
+    const review = await api.post<Review>('/reviews');
+    setReviews(prev => [review, ...prev]);
+    setActiveReview(review);
+    return review;
+  };
+
+  const deleteReview = async (id: number) => {
+    await api.delete(`/reviews/${id}`);
+    setReviews(prev => prev.filter(r => r.id !== id));
+    setActiveReview(prev => prev?.id === id ? null : prev);
+  };
 
   const updateReview = (id: number, updates: Partial<Review> & { area_scores?: { life_area_id: number; score: number; note?: string }[] }) => {
     // Optimistic local update
@@ -96,7 +111,7 @@ export function useReviews() {
       return updated;
     };
 
-    setCurrent(prev => prev && prev.id === id ? applyUpdates(prev) : prev);
+    setActiveReview(prev => prev && prev.id === id ? applyUpdates(prev) : prev);
     setReviews(prev => prev.map(r => r.id === id ? applyUpdates(r) : r));
 
     debouncedSave(`review-${id}`, () => api.put(`/reviews/${id}`, updates));
@@ -107,7 +122,7 @@ export function useReviews() {
     await refresh();
   };
 
-  return { reviews, current, loading, refresh, updateReview, completeReview };
+  return { reviews, activeReview, setActiveReview, loading, refresh, createReview, deleteReview, updateReview, completeReview };
 }
 
 export type { Review, AreaScore };

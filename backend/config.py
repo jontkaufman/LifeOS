@@ -62,3 +62,40 @@ def remove_api_key(provider: str):
 def get_configured_providers() -> list[dict]:
     keys = load_api_keys()
     return [{"provider": p, "configured": True} for p in keys if keys[p]]
+
+
+def save_google_tokens(tokens: dict):
+    keys = load_api_keys()
+    keys["google_calendar_tokens"] = tokens
+    f = get_fernet()
+    CONFIG_PATH.write_bytes(f.encrypt(json.dumps(keys).encode()))
+
+
+def load_google_tokens() -> dict | None:
+    keys = load_api_keys()
+    return keys.get("google_calendar_tokens")
+
+
+def save_google_credentials(client_id: str, client_secret: str):
+    keys = load_api_keys()
+    keys["google_client_id"] = client_id
+    keys["google_client_secret"] = client_secret
+    f = get_fernet()
+    CONFIG_PATH.write_bytes(f.encrypt(json.dumps(keys).encode()))
+
+
+def load_google_credentials() -> tuple[str | None, str | None]:
+    # Env vars take priority (set once in docker-compose / .env)
+    env_id = os.environ.get("GOOGLE_CLIENT_ID")
+    env_secret = os.environ.get("GOOGLE_CLIENT_SECRET")
+    if env_id and env_secret:
+        return env_id, env_secret
+    keys = load_api_keys()
+    return keys.get("google_client_id"), keys.get("google_client_secret")
+
+
+def remove_google_tokens():
+    keys = load_api_keys()
+    keys.pop("google_calendar_tokens", None)
+    f = get_fernet()
+    CONFIG_PATH.write_bytes(f.encrypt(json.dumps(keys).encode()))

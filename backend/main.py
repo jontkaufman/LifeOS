@@ -35,6 +35,7 @@ from routers import chat as chat_router
 from routers import dashboard as dashboard_router
 from routers import onboarding as onboarding_router
 from routers import data as data_router
+from routers import calendar as calendar_router
 
 app.include_router(settings_router.router, prefix="/api/settings", tags=["settings"])
 app.include_router(profile_router.router, prefix="/api/profile", tags=["profile"])
@@ -45,6 +46,7 @@ app.include_router(chat_router.router, prefix="/api/chat", tags=["chat"])
 app.include_router(dashboard_router.router, prefix="/api/dashboard", tags=["dashboard"])
 app.include_router(onboarding_router.router, prefix="/api/onboarding", tags=["onboarding"])
 app.include_router(data_router.router, prefix="/api/data", tags=["data"])
+app.include_router(calendar_router.router, prefix="/api/calendar", tags=["calendar"])
 
 # Serve frontend static files
 if FRONTEND_DIR.exists():

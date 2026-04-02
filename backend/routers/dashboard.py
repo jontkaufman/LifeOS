@@ -47,7 +47,7 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
             "progress": g.progress, "life_area_id": g.life_area_id, "priority": g.priority,
         } for g in goals],
         "latest_review": {
-            "week_id": latest_review.week_id,
+            "date": str(latest_review.date),
             "life_satisfaction": latest_review.life_satisfaction,
             "energy_level": latest_review.energy_level,
             "stress_level": latest_review.stress_level,
