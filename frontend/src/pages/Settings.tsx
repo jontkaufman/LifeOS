@@ -459,7 +459,7 @@ function GoogleCalendarSetup({ onSave, saving }: { onSave: (clientId: string, cl
           <li>Enable the Google Calendar API</li>
           <li>Go to Credentials → Create Credentials → OAuth client ID</li>
           <li>Application type: Web application</li>
-          <li>Add authorized redirect URI: <code className="text-xs bg-background px-1 py-0.5 rounded">{window.location.origin}/api/calendar/oauth/callback</code></li>
+          <li>Add authorized redirect URI: <code className="text-xs bg-background px-1 py-0.5 rounded">http://&lt;YOUR_IP_OR_DOMAIN&gt;:{window.location.port || '80'}/api/calendar/oauth/callback</code></li>
           <li>Copy the Client ID and Client Secret above</li>
         </ol>
       </div>
