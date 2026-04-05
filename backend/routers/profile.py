@@ -1,3 +1,4 @@
+import asyncio
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -5,6 +6,12 @@ from database import get_db
 from models.profile import UserProfile, LifeArea, CoachingIntake, LifeEvent
 
 router = APIRouter()
+
+PROFILE_EXCLUDE = {"pronouns"}
+
+
+def _profile_dict(profile: UserProfile) -> dict:
+    return {c.key: getattr(profile, c.key) for c in UserProfile.__table__.columns if c.key not in PROFILE_EXCLUDE}
 
 
 async def get_or_create_profile(db: AsyncSession) -> UserProfile:
@@ -29,14 +36,21 @@ async def get_or_create_intake(db: AsyncSession) -> CoachingIntake:
     return intake
 
 
+def _trigger_summary_regen():
+    """Fire-and-forget profile summary regeneration."""
+    from services.profile_summary import regenerate_profile_summary
+    asyncio.create_task(regenerate_profile_summary())
+
+
 @router.get("")
 async def get_profile(db: AsyncSession = Depends(get_db)):
     profile = await get_or_create_profile(db)
     intake = await get_or_create_intake(db)
-    areas_result = await db.execute(select(LifeArea).where(LifeArea.is_active == True).order_by(LifeArea.sort_order))
+    # Return ALL life areas (active and inactive) so frontend can show checkboxes
+    areas_result = await db.execute(select(LifeArea).order_by(LifeArea.sort_order))
     areas = areas_result.scalars().all()
     return {
-        "profile": {c.key: getattr(profile, c.key) for c in UserProfile.__table__.columns},
+        "profile": _profile_dict(profile),
         "intake": {c.key: getattr(intake, c.key) for c in CoachingIntake.__table__.columns},
         "life_areas": [{c.key: getattr(a, c.key) for c in LifeArea.__table__.columns} for a in areas],
     }
@@ -45,18 +59,19 @@ async def get_profile(db: AsyncSession = Depends(get_db)):
 @router.put("")
 async def update_profile(data: dict, db: AsyncSession = Depends(get_db)):
     profile = await get_or_create_profile(db)
-    allowed = ["name", "preferred_name", "pronouns", "life_vision", "core_values",
+    allowed = ["name", "preferred_name", "life_vision", "core_values",
                "current_context", "strengths", "growth_edges", "personality_data", "stage_of_change"]
     for key in allowed:
         if key in data:
             setattr(profile, key, data[key])
     await db.commit()
+    _trigger_summary_regen()
     return {"status": "ok"}
 
 
 @router.get("/life-areas")
 async def get_life_areas(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(LifeArea).where(LifeArea.is_active == True).order_by(LifeArea.sort_order))
+    result = await db.execute(select(LifeArea).order_by(LifeArea.sort_order))
     areas = result.scalars().all()
     return [{c.key: getattr(a, c.key) for c in LifeArea.__table__.columns} for a in areas]
 
@@ -69,6 +84,7 @@ async def create_life_area(data: dict, db: AsyncSession = Depends(get_db)):
     db.add(area)
     await db.commit()
     await db.refresh(area)
+    _trigger_summary_regen()
     return {c.key: getattr(area, c.key) for c in LifeArea.__table__.columns}
 
 
@@ -79,11 +95,13 @@ async def update_life_area(area_id: int, data: dict, db: AsyncSession = Depends(
     if not area:
         return {"error": "Not found"}
     allowed = ["name", "icon", "color", "description", "current_state", "importance",
-               "satisfaction", "review_cadence", "sort_order", "is_active"]
+               "satisfaction", "review_cadence", "sort_order", "is_active",
+               "goals", "challenges", "success_vision", "additional_context"]
     for key in allowed:
         if key in data:
             setattr(area, key, data[key])
     await db.commit()
+    _trigger_summary_regen()
     return {"status": "ok"}
 
 
@@ -94,6 +112,7 @@ async def delete_life_area(area_id: int, db: AsyncSession = Depends(get_db)):
     if area:
         area.is_active = False
         await db.commit()
+        _trigger_summary_regen()
     return {"status": "ok"}
 
 
@@ -106,6 +125,7 @@ async def update_intake(data: dict, db: AsyncSession = Depends(get_db)):
         if key in data:
             setattr(intake, key, data[key])
     await db.commit()
+    _trigger_summary_regen()
     return {"status": "ok"}
 
 

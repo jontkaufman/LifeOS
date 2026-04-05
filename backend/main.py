@@ -11,6 +11,7 @@ from fastapi.responses import FileResponse
 from database import init_db
 from presets.life_areas import seed_life_areas
 from presets.coaching_styles import seed_coaching_styles
+from services.profile_summary import regenerate_profile_summary
 
 FRONTEND_DIR = Path(__file__).parent.parent / "frontend" / "dist"
 
@@ -20,6 +21,7 @@ async def lifespan(app: FastAPI):
     await init_db()
     await seed_life_areas()
     await seed_coaching_styles()
+    await regenerate_profile_summary()
     yield
 
 

@@ -318,7 +318,7 @@ export default function Settings() {
                 <Slider
                   value={[settings.context_max_tokens]}
                   onValueChange={sliderHandler(v => updateSetting('context_max_tokens', v))}
-                  min={1000} max={8000} step={500}
+                  min={1000} max={16000} step={500}
                   className="mt-2"
                 />
               </div>

@@ -11,6 +11,10 @@ interface LifeArea {
   current_state: string;
   importance: number;
   satisfaction: number;
+  goals: string;
+  challenges: string;
+  success_vision: string;
+  additional_context: string;
   review_cadence: string;
   sort_order: number;
   is_default: boolean;
@@ -21,7 +25,6 @@ interface Profile {
   id: number;
   name: string;
   preferred_name: string | null;
-  pronouns: string | null;
   life_vision: string;
   core_values: string;
   current_context: string;
@@ -98,7 +101,12 @@ export function useProfile() {
         life_areas: prev.life_areas.map(a => a.id === id ? { ...a, ...updates } : a),
       };
     });
-    debouncedSave(`life-area-${id}`, () => api.put(`/profile/life-areas/${id}`, updates));
+    // Discrete toggles (is_active) save immediately; continuous inputs debounce
+    if ('is_active' in updates && Object.keys(updates).length === 1) {
+      api.put(`/profile/life-areas/${id}`, updates);
+    } else {
+      debouncedSave(`life-area-${id}`, () => api.put(`/profile/life-areas/${id}`, updates));
+    }
   };
 
   const updateIntake = (updates: Partial<CoachingIntake>) => {

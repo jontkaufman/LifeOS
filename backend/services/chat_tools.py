@@ -1,5 +1,6 @@
 """AI tool definitions and executor for chat-based goal/review/profile management."""
 
+import asyncio
 from datetime import datetime, date
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -147,7 +148,6 @@ TOOLS = [
             "properties": {
                 "name": {"type": "string"},
                 "preferred_name": {"type": "string"},
-                "pronouns": {"type": "string"},
                 "life_vision": {"type": "string"},
                 "core_values": {"type": "string", "description": "JSON array of values, e.g. '[\"growth\",\"health\"]'"},
                 "current_context": {"type": "string"},
@@ -160,7 +160,7 @@ TOOLS = [
     },
     {
         "name": "update_life_area",
-        "description": "Update a life area's fields (satisfaction, importance, description, etc).",
+        "description": "Update a life area's fields (satisfaction, importance, goals, challenges, etc).",
         "parameters": {
             "type": "object",
             "properties": {
@@ -170,6 +170,10 @@ TOOLS = [
                 "current_state": {"type": "string"},
                 "importance": {"type": "integer", "description": "1-10"},
                 "satisfaction": {"type": "integer", "description": "1-10"},
+                "goals": {"type": "string", "description": "Goals for this life area"},
+                "challenges": {"type": "string", "description": "Current challenges in this area"},
+                "success_vision": {"type": "string", "description": "What success looks like in this area"},
+                "additional_context": {"type": "string", "description": "Any other relevant context"},
             },
             "required": ["life_area_id"],
         },
@@ -314,6 +318,11 @@ async def execute_tool(name: str, args: dict, db: AsyncSession) -> dict:
         return await handler(args, db)
     except Exception as e:
         return {"error": str(e)}
+
+
+def _trigger_summary_regen():
+    from services.profile_summary import regenerate_profile_summary
+    asyncio.create_task(regenerate_profile_summary())
 
 
 # -- Goal handlers --
@@ -551,7 +560,6 @@ async def _handle_get_profile(args: dict, db: AsyncSession) -> dict:
         profile_data = {
             "name": profile.name,
             "preferred_name": profile.preferred_name,
-            "pronouns": profile.pronouns,
             "life_vision": profile.life_vision,
             "core_values": profile.core_values,
             "current_context": profile.current_context,
@@ -571,6 +579,10 @@ async def _handle_get_profile(args: dict, db: AsyncSession) -> dict:
                 "satisfaction": a.satisfaction,
                 "description": a.description,
                 "current_state": a.current_state,
+                "goals": a.goals,
+                "challenges": a.challenges,
+                "success_vision": a.success_vision,
+                "additional_context": a.additional_context,
             }
             for a in areas
         ],
@@ -586,7 +598,7 @@ async def _handle_update_profile(args: dict, db: AsyncSession) -> dict:
         return {"error": "Profile not found"}
 
     updatable = [
-        "name", "preferred_name", "pronouns", "life_vision",
+        "name", "preferred_name", "life_vision",
         "core_values", "current_context", "strengths", "growth_edges",
         "stage_of_change",
     ]
@@ -595,6 +607,7 @@ async def _handle_update_profile(args: dict, db: AsyncSession) -> dict:
             setattr(profile, field, args[field])
 
     await db.commit()
+    _trigger_summary_regen()
     return {"status": "updated"}
 
 
@@ -606,12 +619,14 @@ async def _handle_update_life_area(args: dict, db: AsyncSession) -> dict:
     if not area:
         return {"error": f"Life area {args['life_area_id']} not found"}
 
-    updatable = ["name", "description", "current_state", "importance", "satisfaction"]
+    updatable = ["name", "description", "current_state", "importance", "satisfaction",
+                 "goals", "challenges", "success_vision", "additional_context"]
     for field in updatable:
         if field in args:
             setattr(area, field, args[field])
 
     await db.commit()
+    _trigger_summary_regen()
     return {"status": "updated"}
 
 

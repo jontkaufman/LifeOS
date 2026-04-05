@@ -22,6 +22,18 @@ async def init_db():
         await conn.run_sync(Base.metadata.create_all)
         # Fix columns that were created NOT NULL but should be nullable
         await _migrate_nullable(conn, "reviews", "week_id")
+        # Add new life_areas columns for rich area capture
+        for col in ("goals", "challenges", "success_vision", "additional_context"):
+            await _add_column_if_missing(conn, "life_areas", col, "TEXT DEFAULT ''")
+
+
+async def _add_column_if_missing(conn, table: str, column: str, col_type: str):
+    """Add a column to a table if it doesn't already exist."""
+    from sqlalchemy import text
+    result = await conn.execute(text(f"PRAGMA table_info({table})"))
+    existing = {row[1] for row in result.fetchall()}
+    if column not in existing:
+        await conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}"))
 
 
 async def _migrate_nullable(conn, table: str, column: str):

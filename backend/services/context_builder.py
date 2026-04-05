@@ -27,10 +27,21 @@ async def build_context(db: AsyncSession, messages: list, max_tokens: int = 4000
 
 
 async def build_user_context(db: AsyncSession) -> str:
-    """Build a summary of user data for system prompt injection."""
+    """Build a summary of user data for system prompt injection.
+
+    Reads from the pre-generated profile_summary.md if available,
+    falling back to direct DB queries.
+    """
+    from config import DATA_DIR
+    summary_path = DATA_DIR / "profile_summary.md"
+    if summary_path.exists():
+        content = summary_path.read_text(encoding="utf-8").strip()
+        if content:
+            return content
+
+    # Fallback: build from DB
     parts = []
 
-    # Profile
     result = await db.execute(select(UserProfile).where(UserProfile.id == 1))
     profile = result.scalar_one_or_none()
     if profile and profile.name:
@@ -51,7 +62,6 @@ async def build_user_context(db: AsyncSession) -> str:
         if profile.growth_edges:
             parts.append(f"Growth Edges: {profile.growth_edges}")
 
-    # Life areas
     result = await db.execute(select(LifeArea).where(LifeArea.is_active == True).order_by(LifeArea.sort_order))
     areas = result.scalars().all()
     if areas:
@@ -60,20 +70,17 @@ async def build_user_context(db: AsyncSession) -> str:
             area_strs.append(f"  {a.icon} {a.name}: importance={a.importance}/10, satisfaction={a.satisfaction}/10")
         parts.append("Life Areas:\n" + "\n".join(area_strs))
 
-    # Active goals
     result = await db.execute(select(Goal).where(Goal.status.in_(["not_started", "in_progress"])).limit(10))
     goals = result.scalars().all()
     if goals:
         goal_strs = [f"  - {g.title} ({g.status}, {g.progress}% done)" for g in goals]
         parts.append("Active Goals:\n" + "\n".join(goal_strs))
 
-    # Latest review
     result = await db.execute(select(Review).where(Review.is_completed == True).order_by(Review.date.desc()).limit(1))
     review = result.scalar_one_or_none()
     if review:
         parts.append(f"Latest Review ({review.date}): satisfaction={review.life_satisfaction}/10, energy={review.energy_level}/10, stress={review.stress_level}/10, mood={review.overall_mood}")
 
-    # Active coaching notes
     result = await db.execute(
         select(CoachingNote).where(CoachingNote.is_active == True).order_by(CoachingNote.created_at.desc()).limit(5)
     )

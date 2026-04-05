@@ -15,6 +15,6 @@ class AppSettings(Base):
     accent_color: Mapped[str] = mapped_column(String(10), default="#E8A838")
     font_size: Mapped[str] = mapped_column(String(10), default="medium")
     onboarding_completed: Mapped[bool] = mapped_column(Boolean, default=False)
-    context_max_tokens: Mapped[int] = mapped_column(Integer, default=4000)
+    context_max_tokens: Mapped[int] = mapped_column(Integer, default=6000)
     ai_temperature: Mapped[float] = mapped_column(Float, default=0.7)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

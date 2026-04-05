@@ -1,18 +1,16 @@
 import { useState } from 'react';
-import { useProfile, type Profile as ProfileType } from '@/hooks/useProfile';
+import { useProfile, type LifeArea } from '@/hooks/useProfile';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Slider } from '@/components/ui/slider';
-import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Plus, Save, Trash2, HelpCircle } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { HelpCircle, ChevronDown, ChevronRight } from 'lucide-react';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { selectHandler, sliderHandler } from '@/lib/ui-helpers';
-import { RadarChart, PolarGrid, PolarAngleAxis, Radar, ResponsiveContainer } from 'recharts';
+import { cn } from '@/lib/utils';
 
 const AREA_HINTS: Record<string, string> = {
   career: "Your professional life — job satisfaction, career growth, work-life balance, sense of purpose at work, professional relationships.",
@@ -23,7 +21,137 @@ const AREA_HINTS: Record<string, string> = {
   personal_growth: "Learning & self-development — education, new skills, mindset, self-awareness, therapy, reading, spiritual practice, creativity.",
   fun_recreation: "Leisure & enjoyment — hobbies, travel, play, entertainment, spontaneity, work-life balance, things that recharge you.",
   environment: "Your living & working spaces — home comfort, organization, neighborhood, commute, workspace setup, sense of safety.",
+  spirituality: "Your spiritual or faith life — prayer, meditation, religious community, sense of meaning and transcendence, inner peace.",
+  community: "Your social circles beyond close friends/family — volunteering, neighborhood, clubs, professional networks, giving back.",
+  education: "Formal or informal learning — courses, certifications, reading, skill development, intellectual curiosity, staying sharp.",
+  creativity: "Creative expression — art, music, writing, crafts, design, creative problem-solving, building things.",
 };
+
+function LifeAreaCard({ area, onUpdate }: { area: LifeArea; onUpdate: (updates: Partial<LifeArea>) => void }) {
+  const [expanded, setExpanded] = useState(false);
+  const hint = AREA_HINTS[area.key];
+
+  return (
+    <div
+      className={cn(
+        "border rounded-lg transition-colors overflow-hidden",
+        area.is_active ? "border-border bg-card" : "border-border/50 bg-muted/30"
+      )}
+    >
+      {/* Header — no click handler on the row itself */}
+      <div className="flex items-center gap-3 p-3">
+        {/* Checkbox: isolated in its own label, stops propagation */}
+        <Checkbox
+          checked={area.is_active}
+          onCheckedChange={(checked) => onUpdate({ is_active: checked })}
+        />
+
+        <span className="text-lg leading-none">{area.icon}</span>
+        <span className={cn("font-medium text-sm flex-1", !area.is_active && "text-muted-foreground")}>
+          {area.name}
+        </span>
+
+        {hint && (
+          <Tooltip>
+            <TooltipTrigger className="cursor-help">
+              <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
+            </TooltipTrigger>
+            <TooltipContent side="top" className="max-w-xs">
+              {hint}
+            </TooltipContent>
+          </Tooltip>
+        )}
+
+        {/* Chevron: only button in the header, always visible */}
+        <button
+          type="button"
+          aria-label={expanded ? "Collapse" : "Expand"}
+          className="p-1 rounded hover:bg-muted transition-colors"
+          onClick={() => setExpanded(prev => !prev)}
+        >
+          {expanded
+            ? <ChevronDown className="h-4 w-4 text-muted-foreground" />
+            : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+        </button>
+      </div>
+
+      {/* Expanded Content — only gated on expanded, never on is_active */}
+      {expanded && (
+        <div className="px-4 pb-4 space-y-4 border-t border-border/50 pt-3">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label className="text-xs text-muted-foreground">Importance: {area.importance}/10</Label>
+              <Slider
+                value={[area.importance]}
+                onValueChange={sliderHandler(v => onUpdate({ importance: v }))}
+                min={1} max={10} step={1}
+              />
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">Satisfaction: {area.satisfaction}/10</Label>
+              <Slider
+                value={[area.satisfaction]}
+                onValueChange={sliderHandler(v => onUpdate({ satisfaction: v }))}
+                min={1} max={10} step={1}
+              />
+            </div>
+          </div>
+
+          <div>
+            <Label className="text-xs">Current State</Label>
+            <Textarea
+              value={area.current_state}
+              onChange={e => onUpdate({ current_state: e.target.value })}
+              placeholder="Where are you right now in this area?"
+              rows={2}
+              className="mt-1"
+            />
+          </div>
+          <div>
+            <Label className="text-xs">Goals</Label>
+            <Textarea
+              value={area.goals}
+              onChange={e => onUpdate({ goals: e.target.value })}
+              placeholder="What do you want to achieve here?"
+              rows={2}
+              className="mt-1"
+            />
+          </div>
+          <div>
+            <Label className="text-xs">Challenges</Label>
+            <Textarea
+              value={area.challenges}
+              onChange={e => onUpdate({ challenges: e.target.value })}
+              placeholder="What's getting in the way?"
+              rows={2}
+              className="mt-1"
+            />
+          </div>
+          <div>
+            <Label className="text-xs">Success Vision</Label>
+            <Textarea
+              value={area.success_vision}
+              onChange={e => onUpdate({ success_vision: e.target.value })}
+              placeholder="What does success look like in 6-12 months?"
+              rows={2}
+              className="mt-1"
+            />
+          </div>
+          <div>
+            <Label className="text-xs">Additional Context</Label>
+            <Textarea
+              value={area.additional_context}
+              onChange={e => onUpdate({ additional_context: e.target.value })}
+              placeholder="Anything else your coach should know about this area?"
+              rows={2}
+              className="mt-1"
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function Profile() {
   const { data, loading, updateProfile, updateLifeArea, updateIntake } = useProfile();
@@ -31,13 +159,6 @@ export default function Profile() {
   if (loading || !data) return <div className="text-muted-foreground">Loading profile...</div>;
 
   const { profile, intake, life_areas } = data;
-
-  const radarData = life_areas.map(area => ({
-    area: area.name.split(' ')[0],
-    importance: area.importance,
-    satisfaction: area.satisfaction,
-    fullMark: 10,
-  }));
 
   return (
     <div className="space-y-6 max-w-4xl">
@@ -48,7 +169,7 @@ export default function Profile() {
           <CardDescription>Who you are and what drives you</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 gap-4">
             <div>
               <Label>Name</Label>
               <Input
@@ -63,14 +184,6 @@ export default function Profile() {
                 value={profile.preferred_name ?? ''}
                 onChange={e => updateProfile({ preferred_name: e.target.value })}
                 placeholder="What should I call you?"
-              />
-            </div>
-            <div>
-              <Label>Pronouns</Label>
-              <Input
-                value={profile.pronouns ?? ''}
-                onChange={e => updateProfile({ pronouns: e.target.value })}
-                placeholder="e.g., they/them"
               />
             </div>
           </div>
@@ -127,60 +240,21 @@ export default function Profile() {
         </CardContent>
       </Card>
 
-      {/* Wheel of Life */}
+      {/* Life Areas */}
       <Card>
         <CardHeader>
-          <CardTitle>Wheel of Life</CardTitle>
-          <CardDescription>Rate the importance and your satisfaction in each life area</CardDescription>
+          <CardTitle>Life Areas</CardTitle>
+          <CardDescription>Toggle the areas that matter to you and fill in details to help your coach understand each one</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <ResponsiveContainer width="100%" height={350}>
-              <RadarChart data={radarData}>
-                <PolarGrid stroke="#222633" />
-                <PolarAngleAxis dataKey="area" tick={{ fill: '#9A9DAA', fontSize: 12 }} />
-                <Radar name="Importance" dataKey="importance" stroke="#E8A838" fill="#E8A838" fillOpacity={0.15} />
-                <Radar name="Satisfaction" dataKey="satisfaction" stroke="#50C878" fill="#50C878" fillOpacity={0.15} />
-              </RadarChart>
-            </ResponsiveContainer>
-            <div className="space-y-4">
-              {life_areas.map(area => (
-                <div key={area.id} className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <span>{area.icon}</span>
-                    <span className="text-sm font-medium">{area.name}</span>
-                    {AREA_HINTS[area.key] && (
-                      <Tooltip>
-                        <TooltipTrigger className="cursor-help">
-                          <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
-                        </TooltipTrigger>
-                        <TooltipContent side="right" className="max-w-xs">
-                          {AREA_HINTS[area.key]}
-                        </TooltipContent>
-                      </Tooltip>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Importance: {area.importance}</Label>
-                      <Slider
-                        value={[area.importance]}
-                        onValueChange={sliderHandler(v => updateLifeArea(area.id, { importance: v }))}
-                        min={1} max={10} step={1}
-                      />
-                    </div>
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Satisfaction: {area.satisfaction}</Label>
-                      <Slider
-                        value={[area.satisfaction]}
-                        onValueChange={sliderHandler(v => updateLifeArea(area.id, { satisfaction: v }))}
-                        min={1} max={10} step={1}
-                      />
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {life_areas.map(area => (
+              <LifeAreaCard
+                key={area.id}
+                area={area}
+                onUpdate={(updates) => updateLifeArea(area.id, updates)}
+              />
+            ))}
           </div>
         </CardContent>
       </Card>

@@ -29,7 +29,7 @@ class AnthropicProvider(AIProvider):
 
         kwargs = {
             "model": self.model,
-            "max_tokens": 4096,
+            "max_tokens": 8192,
             "temperature": self.temperature,
             "messages": messages,
         }
@@ -52,7 +52,7 @@ class AnthropicProvider(AIProvider):
 
         kwargs = {
             "model": self.model,
-            "max_tokens": 4096,
+            "max_tokens": 8192,
             "temperature": self.temperature,
             "messages": messages,
             "tools": tools,
