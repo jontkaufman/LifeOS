@@ -38,7 +38,9 @@ from routers import dashboard as dashboard_router
 from routers import onboarding as onboarding_router
 from routers import data as data_router
 from routers import calendar as calendar_router
+from routers import system as system_router
 
+app.include_router(system_router.router, prefix="/api/system", tags=["system"])
 app.include_router(settings_router.router, prefix="/api/settings", tags=["settings"])
 app.include_router(profile_router.router, prefix="/api/profile", tags=["profile"])
 app.include_router(coaching_router.router, prefix="/api/coaching", tags=["coaching"])

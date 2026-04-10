@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Slider } from '@/components/ui/slider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { CheckCircle2, XCircle, Eye, EyeOff, Download, Upload, Loader2, Calendar } from 'lucide-react';
+import { CheckCircle2, XCircle, Eye, EyeOff, Download, Upload, Loader2, Calendar, RefreshCw, GitCommit, AlertCircle, Check } from 'lucide-react';
 import { selectHandler, sliderHandler } from '@/lib/ui-helpers';
 
 interface Settings {
@@ -33,6 +33,27 @@ interface CalendarStatus {
   connected: boolean;
 }
 
+interface UpdateCheck {
+  docker_mode: boolean;
+  current_commit?: string;
+  current_date?: string;
+  updates_available: boolean;
+  commits?: { hash: string; message: string }[];
+}
+
+interface UpdateStatus {
+  step?: string;
+  status: string;
+  error?: string;
+}
+
+const UPDATE_STEPS = [
+  { key: 'pull', label: 'Pulling latest code' },
+  { key: 'backend_deps', label: 'Installing backend dependencies' },
+  { key: 'frontend_deps', label: 'Installing frontend dependencies' },
+  { key: 'build', label: 'Building frontend' },
+];
+
 const MODEL_OPTIONS: Record<string, string[]> = {
   anthropic: ['claude-sonnet-4-5-20250929', 'claude-haiku-4-5-20251001', 'claude-opus-4-5-20250714'],
   openai: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'o1'],
@@ -52,6 +73,12 @@ export default function Settings() {
   // Calendar state
   const [calendarStatus, setCalendarStatus] = useState<CalendarStatus | null>(null);
   const [savingCreds, setSavingCreds] = useState(false);
+
+  // Update state
+  const [updateCheck, setUpdateCheck] = useState<UpdateCheck | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
+  const [updating, setUpdating] = useState(false);
 
   // Check for google=connected URL param
   const [defaultTab, setDefaultTab] = useState('api');
@@ -160,6 +187,42 @@ export default function Settings() {
     loadCalendarStatus();
   };
 
+  const checkForUpdates = async () => {
+    setChecking(true);
+    setUpdateCheck(null);
+    try {
+      const result = await api.get<UpdateCheck>('/system/check-update');
+      setUpdateCheck(result);
+    } catch {
+      setUpdateCheck(null);
+    }
+    setChecking(false);
+  };
+
+  const startUpdate = async () => {
+    setUpdating(true);
+    setUpdateStatus({ step: 'pull', status: 'running' });
+    try {
+      await api.post('/system/update');
+      // Poll for status
+      const poll = setInterval(async () => {
+        try {
+          const s = await api.get<UpdateStatus>('/system/update/status');
+          setUpdateStatus(s);
+          if (s.status === 'complete' || s.status === 'error') {
+            clearInterval(poll);
+            setUpdating(false);
+          }
+        } catch {
+          // Server may be restarting, keep polling
+        }
+      }, 2000);
+    } catch {
+      setUpdateStatus({ step: 'pull', status: 'error', error: 'Failed to start update' });
+      setUpdating(false);
+    }
+  };
+
   if (!settings) return <div className="text-muted-foreground">Loading settings...</div>;
 
   return (
@@ -171,6 +234,7 @@ export default function Settings() {
           <TabsTrigger value="integrations">Integrations</TabsTrigger>
           <TabsTrigger value="notes">Coaching Notes</TabsTrigger>
           <TabsTrigger value="data">Data</TabsTrigger>
+          <TabsTrigger value="system">System</TabsTrigger>
         </TabsList>
 
         <TabsContent value="api" className="space-y-4 mt-4">
@@ -408,6 +472,121 @@ export default function Settings() {
               <p className="text-xs text-muted-foreground">
                 Export creates a complete JSON backup of all your data. Import will overwrite existing data.
               </p>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="system" className="space-y-4 mt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Software Updates</CardTitle>
+              <CardDescription>Check for and install updates from GitHub.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Current version info */}
+              {updateCheck && !updateCheck.docker_mode && (
+                <div className="flex items-center gap-3 text-sm">
+                  <GitCommit className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-muted-foreground">Current version:</span>
+                  <code className="bg-accent px-2 py-0.5 rounded text-xs">{updateCheck.current_commit}</code>
+                  <span className="text-muted-foreground text-xs">{updateCheck.current_date}</span>
+                </div>
+              )}
+
+              {/* Docker mode message */}
+              {updateCheck?.docker_mode && (
+                <div className="p-3 bg-accent rounded-lg text-sm space-y-1">
+                  <p className="font-medium">Docker Detected</p>
+                  <p className="text-muted-foreground">
+                    Auto-update is not available in Docker. Run <code className="text-xs bg-background px-1 py-0.5 rounded">docker-compose build && docker-compose up -d</code> on your host.
+                  </p>
+                </div>
+              )}
+
+              {/* Check result: up to date */}
+              {updateCheck && !updateCheck.docker_mode && !updateCheck.updates_available && !updating && (
+                <Badge className="bg-green-500/10 text-green-400">
+                  <Check className="h-3 w-3 mr-1" /> Up to date
+                </Badge>
+              )}
+
+              {/* Available commits */}
+              {updateCheck?.updates_available && !updating && !updateStatus?.status?.match(/complete|error/) && (
+                <div className="space-y-3">
+                  <Badge variant="secondary">{updateCheck.commits?.length} update{(updateCheck.commits?.length || 0) > 1 ? 's' : ''} available</Badge>
+                  <div className="space-y-1 max-h-40 overflow-y-auto">
+                    {updateCheck.commits?.map(c => (
+                      <div key={c.hash} className="flex items-center gap-2 text-sm">
+                        <code className="text-xs text-muted-foreground">{c.hash}</code>
+                        <span>{c.message}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <Button onClick={startUpdate}>
+                    <RefreshCw className="h-4 w-4 mr-2" /> Update Now
+                  </Button>
+                </div>
+              )}
+
+              {/* Update progress */}
+              {(updating || updateStatus?.status === 'running') && (
+                <div className="space-y-2">
+                  {UPDATE_STEPS.map((step) => {
+                    const currentIdx = UPDATE_STEPS.findIndex(s => s.key === updateStatus?.step);
+                    const stepIdx = UPDATE_STEPS.findIndex(s => s.key === step.key);
+                    const isActive = step.key === updateStatus?.step && updateStatus?.status === 'running';
+                    const isDone = stepIdx < currentIdx || (step.key === updateStatus?.step && updateStatus?.status !== 'running' && updateStatus?.status !== 'error');
+
+                    return (
+                      <div key={step.key} className={`flex items-center gap-2 text-sm ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}>
+                        {isDone ? (
+                          <Check className="h-4 w-4 text-green-400" />
+                        ) : isActive ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <div className="h-4 w-4 rounded-full border border-muted-foreground/30" />
+                        )}
+                        {step.label}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Error state */}
+              {updateStatus?.status === 'error' && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-sm text-red-400">
+                    <AlertCircle className="h-4 w-4" />
+                    Update failed at step: {updateStatus.step}
+                  </div>
+                  {updateStatus.error && (
+                    <pre className="text-xs bg-accent p-3 rounded-lg overflow-x-auto whitespace-pre-wrap">{updateStatus.error}</pre>
+                  )}
+                  <Button variant="outline" onClick={startUpdate}>Retry</Button>
+                </div>
+              )}
+
+              {/* Complete state */}
+              {updateStatus?.status === 'complete' && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-sm text-green-400">
+                    <CheckCircle2 className="h-4 w-4" />
+                    Update complete!
+                  </div>
+                  <Button onClick={() => window.location.reload()}>
+                    <RefreshCw className="h-4 w-4 mr-2" /> Refresh Page
+                  </Button>
+                </div>
+              )}
+
+              {/* Check button (show when no check done yet or to re-check) */}
+              {!updateCheck?.docker_mode && !updating && updateStatus?.status !== 'running' && (
+                <Button onClick={checkForUpdates} variant="outline" disabled={checking}>
+                  {checking ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+                  Check for Updates
+                </Button>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
